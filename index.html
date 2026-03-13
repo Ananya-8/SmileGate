@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmileGate – Attendance Log</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #0a0c10;
+      --surface:   #111318;
+      --border:    #1e2128;
+      --accent:    #00e5a0;
+      --accent2:   #7b61ff;
+      --warn:      #ff6b35;
+      --text:      #e8eaf0;
+      --muted:     #5a6070;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--text); font-family:var(--font-head); min-height:100vh; }
+    body::before {
+      content:''; position:fixed; inset:0;
+      background-image:
+        linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events:none; z-index:0;
+    }
+    nav {
+      position:sticky; top:0; z-index:100;
+      background:rgba(10,12,16,.85); backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);
+      padding:.75rem 2rem; display:flex; align-items:center; gap:2rem;
+    }
+    .brand { font-size:1.25rem; font-weight:800; color:var(--accent);
+             letter-spacing:-.5px; display:flex; align-items:center; gap:.5rem; }
+    .brand span { color:var(--text); }
+    .nav-links { display:flex; gap:1.25rem; margin-left:auto; }
+    .nav-links a { color:var(--muted); text-decoration:none; font-size:.875rem; font-weight:600;
+                   transition:color .2s; display:flex; align-items:center; gap:.35rem; }
+    .nav-links a:hover, .nav-links a.active { color:var(--accent); }
+
+    .page-wrap {
+      position:relative; z-index:1;
+      max-width:1100px; margin:2.5rem auto;
+      padding:0 1.5rem 4rem;
+    }
+    .page-header { display:flex; align-items:flex-end; gap:2rem; margin-bottom:2rem; }
+    .page-title { font-size:2rem; font-weight:800; }
+    .page-sub { color:var(--muted); font-size:.9rem; }
+    .page-actions { margin-left:auto; display:flex; gap:.75rem; }
+
+    .btn-export {
+      background:var(--border); color:var(--text);
+      border:1px solid var(--border); border-radius:10px;
+      padding:.6rem 1rem; font-family:var(--font-head);
+      font-weight:600; font-size:.82rem; cursor:pointer;
+      transition:background .2s; text-decoration:none;
+      display:flex; align-items:center; gap:.4rem;
+    }
+    .btn-export:hover { background:#252830; color:var(--text); }
+
+    /* ── Summary cards ──────────────────── */
+    .summary-row { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.75rem; }
+    @media (max-width:700px) { .summary-row { grid-template-columns:repeat(2,1fr); } }
+    .sum-card {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:14px; padding:1rem 1.25rem;
+    }
+    .sum-val { font-size:2rem; font-weight:800; color:var(--accent); font-family:var(--font-mono); }
+    .sum-lbl { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:.1rem; }
+
+    /* ── Layout ─────────────────────────── */
+    .log-layout { display:grid; grid-template-columns:1fr 280px; gap:1.5rem; }
+    @media (max-width:850px) { .log-layout { grid-template-columns:1fr; } }
+
+    /* ── Table ──────────────────────────── */
+    .panel {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:16px; overflow:hidden;
+    }
+    .panel-header {
+      padding:.85rem 1.25rem; border-bottom:1px solid var(--border);
+      font-size:.75rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:1px; color:var(--muted);
+      display:flex; align-items:center; gap:.5rem;
+    }
+    .search-input {
+      margin-left:auto; background:#0d0f14; border:1px solid var(--border);
+      color:var(--text); border-radius:8px; padding:.35rem .75rem;
+      font-family:var(--font-mono); font-size:.78rem; outline:none;
+      width:180px; transition:border-color .2s;
+    }
+    .search-input:focus { border-color:var(--accent2); }
+    .search-input::placeholder { color:var(--muted); }
+
+    .att-table { width:100%; border-collapse:collapse; }
+    .att-table th {
+      padding:.7rem 1rem; text-align:left;
+      font-size:.68rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:.5px; color:var(--muted);
+      border-bottom:1px solid var(--border);
+    }
+    .att-table td {
+      padding:.75rem 1rem; border-bottom:1px solid var(--border);
+      font-size:.85rem; vertical-align:middle;
+    }
+    .att-table tr:last-child td { border-bottom:none; }
+    .att-table tr:hover td { background:rgba(255,255,255,.02); }
+
+    .enroll-chip {
+      font-family:var(--font-mono); font-size:.72rem;
+      padding:.2rem .55rem; border-radius:6px;
+      background:rgba(123,97,255,.1); color:var(--accent2);
+    }
+    .score-bar-wrap { display:flex; align-items:center; gap:.6rem; }
+    .score-bar {
+      flex:1; height:5px; background:var(--border);
+      border-radius:99px; overflow:hidden;
+    }
+    .score-fill {
+      height:100%;
+      background:linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius:99px;
+    }
+    .score-txt { font-family:var(--font-mono); font-size:.75rem; color:var(--accent); width:38px; }
+
+    .empty-row td {
+      text-align:center; padding:3rem;
+      color:var(--muted); font-size:.9rem;
+    }
+
+    /* ── Student sidebar ──────────────────── */
+    .stu-list { padding:0; max-height:480px; overflow-y:auto; }
+    .stu-list::-webkit-scrollbar { width:4px; }
+    .stu-list::-webkit-scrollbar-thumb { background:var(--border); }
+    .stu-item {
+      padding:.75rem 1.1rem; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:.7rem;
+    }
+    .stu-item:last-child { border-bottom:none; }
+    .stu-avatar {
+      width:34px; height:34px; border-radius:50%;
+      background:rgba(0,229,160,.1); border:1px solid rgba(0,229,160,.2);
+      color:var(--accent); font-size:.75rem; font-weight:800;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .stu-name { font-size:.83rem; font-weight:600; }
+    .stu-enroll { font-family:var(--font-mono); font-size:.7rem; color:var(--muted); }
+    .stu-del {
+      margin-left:auto; background:none; border:none;
+      color:var(--muted); cursor:pointer; font-size:.9rem;
+      transition:color .2s;
+    }
+    .stu-del:hover { color:var(--warn); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="brand"><i class="bi bi-shield-check-fill"></i>Smile<span>Gate</span></div>
+  <div class="nav-links">
+    <a href="/"><i class="bi bi-camera-video-fill"></i> Scanner</a>
+    <a href="/register"><i class="bi bi-person-plus-fill"></i> Register</a>
+    <a href="/attendance_log" class="active"><i class="bi bi-journal-check"></i> Log</a>
+  </div>
+</nav>
+
+<div class="page-wrap">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Attendance Log</div>
+      <div class="page-sub">All recorded attendance events, most recent first.</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn-export" onclick="exportCSV()">
+        <i class="bi bi-download"></i> Export CSV
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Summary cards ───────────────────────────────────────────── -->
+  <div class="summary-row">
+    <div class="sum-card">
+      <div class="sum-val">{{ students|length }}</div>
+      <div class="sum-lbl">Registered</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-val">{{ records|length }}</div>
+      <div class="sum-lbl">Total Records</div>
+    </div>
+    <div class="sum-card">
+      {% set today_str = now if now is defined else '' %}
+      {% set today_records = records|selectattr('date','equalto', today_str)|list %}
+      <div class="sum-val" id="todayCount">
+        {{ records|selectattr('date','equalto', records[0].date if records else '')|list|length if records else 0 }}
+      </div>
+      <div class="sum-lbl">Today's Entries</div>
+    </div>
+    <div class="sum-card">
+      {% if records %}
+        {% set avg = (records|sum(attribute='smile_score')) / records|length %}
+        <div class="sum-val">{{ "%.0f"|format(avg) }}%</div>
+      {% else %}
+        <div class="sum-val">–</div>
+      {% endif %}
+      <div class="sum-lbl">Avg Smile Score</div>
+    </div>
+  </div>
+
+  <div class="log-layout">
+
+    <!-- ── Attendance table ─────────────────────────── -->
+    <div class="panel">
+      <div class="panel-header">
+        <i class="bi bi-table"></i> Records
+        <input class="search-input" type="text" id="searchInput"
+               placeholder="Search name / ID…" oninput="filterTable()" />
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="att-table" id="attTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Student</th>
+              <th>Enrollment</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Smile Score</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            {% if records %}
+              {% for r in records %}
+              <tr>
+                <td style="color:var(--muted); font-family:var(--font-mono); font-size:.75rem;">
+                  {{ loop.index }}
+                </td>
+                <td style="font-weight:600;">{{ r.name }}</td>
+                <td><span class="enroll-chip">{{ r.enrollment_no }}</span></td>
+                <td style="font-family:var(--font-mono); font-size:.8rem; color:var(--muted);">{{ r.date }}</td>
+                <td style="font-family:var(--font-mono); font-size:.8rem; color:var(--muted);">{{ r.time }}</td>
+                <td>
+                  <div class="score-bar-wrap">
+                    <div class="score-bar">
+                      <div class="score-fill" style="width:{{ r.smile_score|round(0)|int }}%"></div>
+                    </div>
+                    <div class="score-txt">{{ "%.1f"|format(r.smile_score) }}%</div>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="empty-row"><td colspan="6">No attendance records yet. Use the Scanner to mark attendance.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Student sidebar ──────────────────────────── -->
+    <div>
+      <div class="panel">
+        <div class="panel-header"><i class="bi bi-people-fill"></i> Registered Students</div>
+        <div class="stu-list" id="stuList">
+          {% if students %}
+            {% for s in students %}
+            <div class="stu-item" id="stu-{{ s.id }}">
+              <div class="stu-avatar">
+                {{ s.name.split(' ') | map('first') | join('') | upper | truncate(2, True, '') }}
+              </div>
+              <div>
+                <div class="stu-name">{{ s.name }}</div>
+                <div class="stu-enroll">{{ s.enrollment_no }}</div>
+              </div>
+              <button class="stu-del" title="Delete student"
+                      onclick="deleteStudent({{ s.id }}, '{{ s.name }}')">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div style="padding:2rem; text-align:center; color:var(--muted); font-size:.85rem;">
+              No students registered yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Live table search ──────────────────────────────────────
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('#tableBody tr:not(.empty-row)').forEach(row => {
+    const txt = row.textContent.toLowerCase();
+    row.style.display = txt.includes(q) ? '' : 'none';
+  });
+}
+
+// ── Delete student ─────────────────────────────────────────
+async function deleteStudent(id, name) {
+  if (!confirm(`Delete student "${name}" and all their attendance records?`)) return;
+  try {
+    const resp = await fetch(`/api/delete_student/${id}`, { method:'DELETE' });
+    const data = await resp.json();
+    if (data.status === 'success') {
+      document.getElementById(`stu-${id}`)?.remove();
+    } else {
+      alert('Delete failed: ' + data.message);
+    }
+  } catch { alert('Network error.'); }
+}
+
+// ── CSV export ─────────────────────────────────────────────
+function exportCSV() {
+  const rows = [['Name','Enrollment No','Date','Time','Smile Score']];
+  document.querySelectorAll('#tableBody tr:not(.empty-row)').forEach(tr => {
+    const cells = [...tr.querySelectorAll('td')];
+    if (cells.length > 1) {
+      rows.push([
+        cells[1].textContent.trim(),
+        cells[2].textContent.trim(),
+        cells[3].textContent.trim(),
+        cells[4].textContent.trim(),
+        cells[5].textContent.trim()
+      ]);
+    }
+  });
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'attendance_log.csv';
+  a.click();
+}
+</script>
+</body>
+</html>

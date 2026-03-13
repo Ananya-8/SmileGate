@@ -1,0 +1,307 @@
+"""
+========================================================
+  Smile-Based Smart Attendance System
+  FILE: recognize_and_attend.py
+  PURPOSE: Core recognition engine used by app.py.
+           Given a raw webcam frame (as a JPEG byte string
+           from the browser), this module:
+             1. Detects and recognises the face.
+             2. Analyses the emotion (smile / happy score).
+             3. Marks attendance if both checks pass.
+           All logic is wrapped in a single function so
+           Flask can call it cleanly.
+========================================================
+"""
+
+import cv2
+import face_recognition
+import sqlite3
+import numpy as np
+from deepface import DeepFace
+from datetime import datetime
+import os
+import base64
+
+# ── Configuration ──────────────────────────────────────────────────────────────
+DB_PATH = os.path.join(os.path.dirname(__file__), "database", "attendance.db")
+
+# Minimum "happy" confidence (0-100) required to allow entry.
+# Increase this value to make the smile check stricter.
+SMILE_THRESHOLD = 70.0
+
+# How close two face encodings must be to count as the same person.
+# Lower = stricter matching.  Range: 0.0 – 1.0
+FACE_MATCH_TOLERANCE = 0.50
+
+
+# ── Database helpers ───────────────────────────────────────────────────────────
+def get_db_connection():
+    """Opens and returns a connection to the SQLite database."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def load_all_students():
+    """
+    Loads every registered student from the database.
+    Returns a list of dicts, each containing:
+      id, name, enrollment_no, and face_encoding (as np.ndarray).
+    """
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT id, name, enrollment_no, face_encoding FROM students"
+    ).fetchall()
+    conn.close()
+
+    students = []
+    for row in rows:
+        # The encoding was stored as a comma-separated string → convert back
+        encoding_array = np.array(
+            [float(v) for v in row["face_encoding"].split(",")]
+        )
+        students.append({
+            "id": row["id"],
+            "name": row["name"],
+            "enrollment_no": row["enrollment_no"],
+            "face_encoding": encoding_array,
+        })
+
+    return students
+
+
+def already_marked_today(student_id: int) -> bool:
+    """
+    Checks whether attendance has already been recorded for this student
+    today. Returns True if a duplicate record would be created.
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT id FROM attendance WHERE student_id = ? AND date = ?",
+        (student_id, today)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def mark_attendance(student_id: int, smile_score: float) -> bool:
+    """
+    Inserts one attendance record into the database.
+    Returns True on success.
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+    now_time = datetime.now().strftime("%H:%M:%S")
+
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO attendance (student_id, date, time, smile_score) VALUES (?, ?, ?, ?)",
+        (student_id, today, now_time, smile_score)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+# ── Face recognition ───────────────────────────────────────────────────────────
+def identify_face(rgb_frame: np.ndarray, students: list):
+    """
+    Given an RGB frame and the list of known students, tries to find a
+    matching face.
+
+    Returns (student_dict, face_location) if matched, or (None, None).
+    """
+    # Locate all faces in the current frame
+    face_locations = face_recognition.face_locations(rgb_frame)
+
+    if not face_locations:
+        return None, None   # no face visible
+
+    # Encode every detected face
+    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+
+    # Compare each detected face against every known student
+    known_encodings = [s["face_encoding"] for s in students]
+
+    for face_enc, face_loc in zip(face_encodings, face_locations):
+        # face_distance returns a float per known face (lower = more similar)
+        distances = face_recognition.face_distance(known_encodings, face_enc)
+
+        if len(distances) == 0:
+            continue
+
+        best_idx = int(np.argmin(distances))
+        best_distance = distances[best_idx]
+
+        if best_distance <= FACE_MATCH_TOLERANCE:
+            # This face is close enough to a registered student
+            return students[best_idx], face_loc
+
+    return None, None   # no match found
+
+
+# ── Emotion detection ──────────────────────────────────────────────────────────
+def get_happy_score(bgr_frame: np.ndarray) -> float:
+    """
+    Runs DeepFace emotion analysis on the frame and returns the "happy"
+    confidence score (0–100).  Returns 0.0 if analysis fails.
+    """
+    try:
+        # DeepFace.analyze returns a list of result dicts (one per face)
+        results = DeepFace.analyze(
+            img_path=bgr_frame,
+            actions=["emotion"],     # only ask for emotion — faster
+            enforce_detection=False, # don't raise error if no face found
+            silent=True              # suppress DeepFace console output
+        )
+
+        if isinstance(results, list):
+            result = results[0]
+        else:
+            result = results
+
+        # 'emotion' is a dict like {"happy": 92.3, "sad": 1.2, ...}
+        happy_score = result.get("emotion", {}).get("happy", 0.0)
+        return round(float(happy_score), 2)
+
+    except Exception as e:
+        # If DeepFace fails for any reason, treat smile as absent
+        print(f"⚠️  DeepFace error: {e}")
+        return 0.0
+
+
+# ── Main processing function (called by Flask) ─────────────────────────────────
+def process_frame(jpeg_bytes: bytes) -> dict:
+    """
+    Full pipeline: receive a JPEG frame from the browser, run face
+    recognition and smile detection, mark attendance if criteria met.
+
+    Parameters
+    ----------
+    jpeg_bytes : raw JPEG byte string from the browser's canvas capture
+
+    Returns
+    -------
+    A dict with these keys:
+      status        : "success" | "denied" | "duplicate" | "error"
+      message       : human-readable explanation
+      name          : student name (if recognised)
+      enrollment_no : student enrollment number (if recognised)
+      smile_score   : happy confidence score (0-100)
+      annotated_img : base64-encoded annotated JPEG for display
+    """
+
+    # ── Decode the incoming JPEG bytes into an OpenCV image ────────────────────
+    np_arr = np.frombuffer(jpeg_bytes, np.uint8)
+    bgr_frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+    if bgr_frame is None:
+        return {
+            "status": "error",
+            "message": "Could not decode the image frame.",
+            "name": None, "enrollment_no": None,
+            "smile_score": 0, "annotated_img": None
+        }
+
+    # ── Prepare an RGB copy for face_recognition ───────────────────────────────
+    rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
+
+    # ── Load all registered students from the database ─────────────────────────
+    students = load_all_students()
+
+    if not students:
+        return {
+            "status": "error",
+            "message": "No students registered in the database yet.",
+            "name": None, "enrollment_no": None,
+            "smile_score": 0, "annotated_img": None
+        }
+
+    # ── Step 1: Face Recognition ───────────────────────────────────────────────
+    matched_student, face_location = identify_face(rgb_frame, students)
+
+    # Prepare a working copy to draw annotations on
+    annotated = bgr_frame.copy()
+
+    if matched_student is None:
+        # No face detected or face not in database
+        cv2.putText(
+            annotated, "Face Not Recognized", (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2
+        )
+        return {
+            "status": "denied",
+            "message": "Face Not Recognized",
+            "name": None, "enrollment_no": None,
+            "smile_score": 0,
+            "annotated_img": _encode_frame(annotated)
+        }
+
+    # ── Step 2: Emotion / Smile Detection ─────────────────────────────────────
+    happy_score = get_happy_score(bgr_frame)
+
+    # ── Annotate: draw face box and label ──────────────────────────────────────
+    top, right, bottom, left = face_location
+    box_color = (0, 255, 0) if happy_score >= SMILE_THRESHOLD else (0, 165, 255)
+    cv2.rectangle(annotated, (left, top), (right, bottom), box_color, 2)
+    cv2.putText(
+        annotated,
+        f"{matched_student['name']}  Smile:{happy_score:.1f}%",
+        (left, top - 10),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.65, box_color, 2
+    )
+
+    # ── Step 3: Apply access logic ─────────────────────────────────────────────
+    if happy_score < SMILE_THRESHOLD:
+        # Face matched but smile insufficient
+        cv2.putText(
+            annotated, "ACCESS DENIED - Please Smile!", (20, annotated.shape[0] - 20),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2
+        )
+        return {
+            "status": "denied",
+            "message": f"Access Denied – Please Smile Genuinely (score: {happy_score:.1f}%)",
+            "name": matched_student["name"],
+            "enrollment_no": matched_student["enrollment_no"],
+            "smile_score": happy_score,
+            "annotated_img": _encode_frame(annotated)
+        }
+
+    # ── Step 4: Duplicate attendance check ────────────────────────────────────
+    if already_marked_today(matched_student["id"]):
+        cv2.putText(
+            annotated, "Already Marked Today", (20, annotated.shape[0] - 20),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 165, 0), 2
+        )
+        return {
+            "status": "duplicate",
+            "message": "Attendance already marked for today.",
+            "name": matched_student["name"],
+            "enrollment_no": matched_student["enrollment_no"],
+            "smile_score": happy_score,
+            "annotated_img": _encode_frame(annotated)
+        }
+
+    # ── Step 5: Mark attendance ────────────────────────────────────────────────
+    mark_attendance(matched_student["id"], happy_score)
+
+    cv2.putText(
+        annotated, "ACCESS GRANTED", (20, annotated.shape[0] - 20),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2
+    )
+
+    return {
+        "status": "success",
+        "message": f"Welcome, {matched_student['name']}! Attendance marked ✅",
+        "name": matched_student["name"],
+        "enrollment_no": matched_student["enrollment_no"],
+        "smile_score": happy_score,
+        "annotated_img": _encode_frame(annotated)
+    }
+
+
+# ── Helper ─────────────────────────────────────────────────────────────────────
+def _encode_frame(bgr_frame: np.ndarray) -> str:
+    """Encodes an OpenCV frame as a base64 JPEG string for the browser."""
+    _, buffer = cv2.imencode(".jpg", bgr_frame)
+    return base64.b64encode(buffer).decode("utf-8")

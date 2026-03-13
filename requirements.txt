@@ -1,0 +1,198 @@
+"""
+========================================================
+  Smile-Based Smart Attendance System
+  FILE: register_student.py
+  PURPOSE: Registers a new student by:
+             1. Capturing their photo via webcam.
+             2. Generating a 128-point face encoding.
+             3. Storing name, enrollment number, and
+                face encoding in the SQLite database.
+========================================================
+"""
+
+import cv2
+import face_recognition
+import sqlite3
+import numpy as np
+import os
+
+# ── Configuration ──────────────────────────────────────────────────────────────
+DB_PATH = os.path.join(os.path.dirname(__file__), "database", "attendance.db")
+
+
+# ── Database helper ────────────────────────────────────────────────────────────
+def get_db_connection():
+    """Opens and returns a connection to the SQLite database."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row   # lets us access columns by name
+    return conn
+
+
+def enrollment_exists(enrollment_no: str) -> bool:
+    """Returns True if the enrollment number is already in the database."""
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT id FROM students WHERE enrollment_no = ?", (enrollment_no,)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+# ── Face capture ───────────────────────────────────────────────────────────────
+def capture_face_from_webcam() -> np.ndarray | None:
+    """
+    Opens the webcam and waits for the user to press SPACE to capture a frame.
+    Returns the captured frame as a NumPy array, or None on failure.
+    """
+    cap = cv2.VideoCapture(0)   # 0 = default system webcam
+
+    if not cap.isOpened():
+        print("❌ Cannot open webcam. Check your camera connection.")
+        return None
+
+    print("📷 Webcam opened. Press SPACE to capture | Press Q to quit.")
+
+    face_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
+
+    captured_frame = None
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("❌ Failed to read frame from webcam.")
+            break
+
+        # Convert to grayscale for fast face detection (display only)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+
+        # Draw green rectangle around detected faces
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Overlay instructions on the live feed
+        cv2.putText(
+            frame, "SPACE = Capture | Q = Quit",
+            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2
+        )
+
+        cv2.imshow("Register Student - Face Capture", frame)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord(" "):          # SPACE → capture this frame
+            captured_frame = frame
+            print("✅ Frame captured!")
+            break
+        elif key == ord("q"):        # Q → quit without capturing
+            print("⚠️  Registration cancelled by user.")
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    return captured_frame
+
+
+# ── Face encoding ──────────────────────────────────────────────────────────────
+def generate_face_encoding(frame: np.ndarray) -> list | None:
+    """
+    Uses the face_recognition library to extract a 128-dimensional face
+    encoding from the first face found in the frame.
+
+    Returns a Python list of 128 floats, or None if no face is detected.
+    """
+    # face_recognition works with RGB images; OpenCV uses BGR → convert
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Locate all face bounding boxes in the image
+    face_locations = face_recognition.face_locations(rgb_frame)
+
+    if not face_locations:
+        print("❌ No face detected in the captured frame. Please try again.")
+        return None
+
+    if len(face_locations) > 1:
+        print("⚠️  Multiple faces detected. Only the first face will be encoded.")
+
+    # Compute the 128-D encoding for the detected face(s)
+    encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+
+    # Return only the first encoding as a plain Python list (easy to store)
+    return encodings[0].tolist()
+
+
+# ── Database insert ────────────────────────────────────────────────────────────
+def register_student(name: str, enrollment_no: str, encoding: list) -> bool:
+    """
+    Inserts a new student record into the database.
+    The face encoding list is converted to a comma-separated string for storage.
+
+    Returns True on success, False on failure.
+    """
+    # Convert the list of 128 floats to a single comma-separated string
+    encoding_str = ",".join(map(str, encoding))
+
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO students (name, enrollment_no, face_encoding) VALUES (?, ?, ?)",
+            (name, enrollment_no, encoding_str)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        print(f"❌ Enrollment number '{enrollment_no}' already exists in the database.")
+        return False
+
+
+# ── Main registration flow ─────────────────────────────────────────────────────
+def main():
+    print("=" * 55)
+    print("  📋 Student Registration Module")
+    print("=" * 55)
+
+    # ── Step 1: Collect student information ────────────────────────────────────
+    name = input("Enter student full name        : ").strip()
+    enrollment_no = input("Enter enrollment number        : ").strip()
+
+    if not name or not enrollment_no:
+        print("❌ Name and enrollment number cannot be empty.")
+        return
+
+    # ── Step 2: Check for duplicate enrollment number ──────────────────────────
+    if enrollment_exists(enrollment_no):
+        print(f"❌ A student with enrollment number '{enrollment_no}' already exists.")
+        return
+
+    # ── Step 3: Capture the student's face via webcam ──────────────────────────
+    print("\n[Step 1/3] Opening webcam for face capture…")
+    frame = capture_face_from_webcam()
+
+    if frame is None:
+        print("❌ Registration aborted: no frame captured.")
+        return
+
+    # ── Step 4: Generate the face encoding ────────────────────────────────────
+    print("[Step 2/3] Generating face encoding…")
+    encoding = generate_face_encoding(frame)
+
+    if encoding is None:
+        print("❌ Registration aborted: could not generate face encoding.")
+        return
+
+    # ── Step 5: Save to the database ──────────────────────────────────────────
+    print("[Step 3/3] Saving to database…")
+    success = register_student(name, enrollment_no, encoding)
+
+    if success:
+        print(f"\n✅ Student registered successfully!")
+        print(f"   Name          : {name}")
+        print(f"   Enrollment No : {enrollment_no}")
+    else:
+        print("\n❌ Registration failed. See error above.")
+
+
+if __name__ == "__main__":
+    main()
