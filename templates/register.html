@@ -1,307 +1,306 @@
-"""
-========================================================
-  Smile-Based Smart Attendance System
-  FILE: recognize_and_attend.py
-  PURPOSE: Core recognition engine used by app.py.
-           Given a raw webcam frame (as a JPEG byte string
-           from the browser), this module:
-             1. Detects and recognises the face.
-             2. Analyses the emotion (smile / happy score).
-             3. Marks attendance if both checks pass.
-           All logic is wrapped in a single function so
-           Flask can call it cleanly.
-========================================================
-"""
-
-import cv2
-import face_recognition
-import sqlite3
-import numpy as np
-from deepface import DeepFace
-from datetime import datetime
-import os
-import base64
-
-# ── Configuration ──────────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "database", "attendance.db")
-
-# Minimum "happy" confidence (0-100) required to allow entry.
-# Increase this value to make the smile check stricter.
-SMILE_THRESHOLD = 70.0
-
-# How close two face encodings must be to count as the same person.
-# Lower = stricter matching.  Range: 0.0 – 1.0
-FACE_MATCH_TOLERANCE = 0.50
-
-
-# ── Database helpers ───────────────────────────────────────────────────────────
-def get_db_connection():
-    """Opens and returns a connection to the SQLite database."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def load_all_students():
-    """
-    Loads every registered student from the database.
-    Returns a list of dicts, each containing:
-      id, name, enrollment_no, and face_encoding (as np.ndarray).
-    """
-    conn = get_db_connection()
-    rows = conn.execute(
-        "SELECT id, name, enrollment_no, face_encoding FROM students"
-    ).fetchall()
-    conn.close()
-
-    students = []
-    for row in rows:
-        # The encoding was stored as a comma-separated string → convert back
-        encoding_array = np.array(
-            [float(v) for v in row["face_encoding"].split(",")]
-        )
-        students.append({
-            "id": row["id"],
-            "name": row["name"],
-            "enrollment_no": row["enrollment_no"],
-            "face_encoding": encoding_array,
-        })
-
-    return students
-
-
-def already_marked_today(student_id: int) -> bool:
-    """
-    Checks whether attendance has already been recorded for this student
-    today. Returns True if a duplicate record would be created.
-    """
-    today = datetime.now().strftime("%Y-%m-%d")
-    conn = get_db_connection()
-    row = conn.execute(
-        "SELECT id FROM attendance WHERE student_id = ? AND date = ?",
-        (student_id, today)
-    ).fetchone()
-    conn.close()
-    return row is not None
-
-
-def mark_attendance(student_id: int, smile_score: float) -> bool:
-    """
-    Inserts one attendance record into the database.
-    Returns True on success.
-    """
-    today = datetime.now().strftime("%Y-%m-%d")
-    now_time = datetime.now().strftime("%H:%M:%S")
-
-    conn = get_db_connection()
-    conn.execute(
-        "INSERT INTO attendance (student_id, date, time, smile_score) VALUES (?, ?, ?, ?)",
-        (student_id, today, now_time, smile_score)
-    )
-    conn.commit()
-    conn.close()
-    return True
-
-
-# ── Face recognition ───────────────────────────────────────────────────────────
-def identify_face(rgb_frame: np.ndarray, students: list):
-    """
-    Given an RGB frame and the list of known students, tries to find a
-    matching face.
-
-    Returns (student_dict, face_location) if matched, or (None, None).
-    """
-    # Locate all faces in the current frame
-    face_locations = face_recognition.face_locations(rgb_frame)
-
-    if not face_locations:
-        return None, None   # no face visible
-
-    # Encode every detected face
-    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
-
-    # Compare each detected face against every known student
-    known_encodings = [s["face_encoding"] for s in students]
-
-    for face_enc, face_loc in zip(face_encodings, face_locations):
-        # face_distance returns a float per known face (lower = more similar)
-        distances = face_recognition.face_distance(known_encodings, face_enc)
-
-        if len(distances) == 0:
-            continue
-
-        best_idx = int(np.argmin(distances))
-        best_distance = distances[best_idx]
-
-        if best_distance <= FACE_MATCH_TOLERANCE:
-            # This face is close enough to a registered student
-            return students[best_idx], face_loc
-
-    return None, None   # no match found
-
-
-# ── Emotion detection ──────────────────────────────────────────────────────────
-def get_happy_score(bgr_frame: np.ndarray) -> float:
-    """
-    Runs DeepFace emotion analysis on the frame and returns the "happy"
-    confidence score (0–100).  Returns 0.0 if analysis fails.
-    """
-    try:
-        # DeepFace.analyze returns a list of result dicts (one per face)
-        results = DeepFace.analyze(
-            img_path=bgr_frame,
-            actions=["emotion"],     # only ask for emotion — faster
-            enforce_detection=False, # don't raise error if no face found
-            silent=True              # suppress DeepFace console output
-        )
-
-        if isinstance(results, list):
-            result = results[0]
-        else:
-            result = results
-
-        # 'emotion' is a dict like {"happy": 92.3, "sad": 1.2, ...}
-        happy_score = result.get("emotion", {}).get("happy", 0.0)
-        return round(float(happy_score), 2)
-
-    except Exception as e:
-        # If DeepFace fails for any reason, treat smile as absent
-        print(f"⚠️  DeepFace error: {e}")
-        return 0.0
-
-
-# ── Main processing function (called by Flask) ─────────────────────────────────
-def process_frame(jpeg_bytes: bytes) -> dict:
-    """
-    Full pipeline: receive a JPEG frame from the browser, run face
-    recognition and smile detection, mark attendance if criteria met.
-
-    Parameters
-    ----------
-    jpeg_bytes : raw JPEG byte string from the browser's canvas capture
-
-    Returns
-    -------
-    A dict with these keys:
-      status        : "success" | "denied" | "duplicate" | "error"
-      message       : human-readable explanation
-      name          : student name (if recognised)
-      enrollment_no : student enrollment number (if recognised)
-      smile_score   : happy confidence score (0-100)
-      annotated_img : base64-encoded annotated JPEG for display
-    """
-
-    # ── Decode the incoming JPEG bytes into an OpenCV image ────────────────────
-    np_arr = np.frombuffer(jpeg_bytes, np.uint8)
-    bgr_frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-    if bgr_frame is None:
-        return {
-            "status": "error",
-            "message": "Could not decode the image frame.",
-            "name": None, "enrollment_no": None,
-            "smile_score": 0, "annotated_img": None
-        }
-
-    # ── Prepare an RGB copy for face_recognition ───────────────────────────────
-    rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
-
-    # ── Load all registered students from the database ─────────────────────────
-    students = load_all_students()
-
-    if not students:
-        return {
-            "status": "error",
-            "message": "No students registered in the database yet.",
-            "name": None, "enrollment_no": None,
-            "smile_score": 0, "annotated_img": None
-        }
-
-    # ── Step 1: Face Recognition ───────────────────────────────────────────────
-    matched_student, face_location = identify_face(rgb_frame, students)
-
-    # Prepare a working copy to draw annotations on
-    annotated = bgr_frame.copy()
-
-    if matched_student is None:
-        # No face detected or face not in database
-        cv2.putText(
-            annotated, "Face Not Recognized", (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2
-        )
-        return {
-            "status": "denied",
-            "message": "Face Not Recognized",
-            "name": None, "enrollment_no": None,
-            "smile_score": 0,
-            "annotated_img": _encode_frame(annotated)
-        }
-
-    # ── Step 2: Emotion / Smile Detection ─────────────────────────────────────
-    happy_score = get_happy_score(bgr_frame)
-
-    # ── Annotate: draw face box and label ──────────────────────────────────────
-    top, right, bottom, left = face_location
-    box_color = (0, 255, 0) if happy_score >= SMILE_THRESHOLD else (0, 165, 255)
-    cv2.rectangle(annotated, (left, top), (right, bottom), box_color, 2)
-    cv2.putText(
-        annotated,
-        f"{matched_student['name']}  Smile:{happy_score:.1f}%",
-        (left, top - 10),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.65, box_color, 2
-    )
-
-    # ── Step 3: Apply access logic ─────────────────────────────────────────────
-    if happy_score < SMILE_THRESHOLD:
-        # Face matched but smile insufficient
-        cv2.putText(
-            annotated, "ACCESS DENIED - Please Smile!", (20, annotated.shape[0] - 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2
-        )
-        return {
-            "status": "denied",
-            "message": f"Access Denied – Please Smile Genuinely (score: {happy_score:.1f}%)",
-            "name": matched_student["name"],
-            "enrollment_no": matched_student["enrollment_no"],
-            "smile_score": happy_score,
-            "annotated_img": _encode_frame(annotated)
-        }
-
-    # ── Step 4: Duplicate attendance check ────────────────────────────────────
-    if already_marked_today(matched_student["id"]):
-        cv2.putText(
-            annotated, "Already Marked Today", (20, annotated.shape[0] - 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 165, 0), 2
-        )
-        return {
-            "status": "duplicate",
-            "message": "Attendance already marked for today.",
-            "name": matched_student["name"],
-            "enrollment_no": matched_student["enrollment_no"],
-            "smile_score": happy_score,
-            "annotated_img": _encode_frame(annotated)
-        }
-
-    # ── Step 5: Mark attendance ────────────────────────────────────────────────
-    mark_attendance(matched_student["id"], happy_score)
-
-    cv2.putText(
-        annotated, "ACCESS GRANTED", (20, annotated.shape[0] - 20),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2
-    )
-
-    return {
-        "status": "success",
-        "message": f"Welcome, {matched_student['name']}! Attendance marked ✅",
-        "name": matched_student["name"],
-        "enrollment_no": matched_student["enrollment_no"],
-        "smile_score": happy_score,
-        "annotated_img": _encode_frame(annotated)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>😊 SmileGate – Join the Happiness Family</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    :root {
+      --sun:#FFD93D; --coral:#FF6B6B; --sky:#74C0FC; --mint:#69DB7C;
+      --peach:#FFA94D; --lavender:#C77DFF; --rose:#F783AC;
+      --cream:#FFFBF0; --text:#3D2C2C; --muted:#9E8585;
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--cream); min-height: 100vh; overflow-x: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 50% 42% at 0%   0%,  rgba(199,125,255,.2) 0%,transparent 55%),
+        radial-gradient(ellipse 45% 48% at 100% 100%, rgba(105,219,124,.18) 0%,transparent 55%),
+        radial-gradient(ellipse 44% 35% at 50%   0%,  rgba(255,217,61,.18) 0%,transparent 55%),
+        radial-gradient(ellipse 38% 50% at 0%  100%,  rgba(247,131,172,.18) 0%,transparent 55%);
+    }
+    .deco-circle { position:fixed; border-radius:50%; pointer-events:none; z-index:0; animation:floatDeco 6s ease-in-out infinite; }
+    .dc1{width:80px;height:80px;background:rgba(199,125,255,.2);top:5%;left:2%;animation-delay:0s}
+    .dc2{width:55px;height:55px;background:rgba(255,217,61,.22);top:10%;right:4%;animation-delay:1s}
+    .dc3{width:65px;height:65px;background:rgba(105,219,124,.2);bottom:18%;left:5%;animation-delay:2.2s}
+    .dc4{width:45px;height:45px;background:rgba(116,192,252,.22);bottom:8%;right:3%;animation-delay:.6s}
+    @keyframes floatDeco{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
 
+    /* NAV */
+    .happy-nav {
+      position:sticky;top:0;z-index:100;
+      background:rgba(255,251,240,.92);backdrop-filter:blur(16px);
+      border-bottom:4px solid transparent;
+      border-image:linear-gradient(90deg,var(--sun),var(--coral),var(--rose),var(--lavender),var(--sky),var(--mint)) 1;
+      padding:.7rem 2rem;display:flex;align-items:center;gap:1rem;
+      box-shadow:0 4px 24px rgba(255,107,107,.1);
+    }
+    .brand{font-family:'Fredoka One',cursive;font-size:1.7rem;color:var(--coral);text-decoration:none;display:flex;align-items:center;gap:.4rem}
+    .brand-sub{font-size:.55rem;font-weight:900;background:linear-gradient(135deg,var(--peach),var(--rose));color:#fff;padding:.2rem .6rem;border-radius:99px;letter-spacing:1px;text-transform:uppercase;font-family:'Nunito',sans-serif}
+    .nav-links{margin-left:auto;display:flex;gap:.4rem}
+    .nav-pill{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;padding:.42rem 1rem;border-radius:99px;text-decoration:none;color:var(--muted);border:2.5px solid transparent;transition:all .25s}
+    .nav-pill:hover{color:var(--coral);background:rgba(255,107,107,.08);border-color:rgba(255,107,107,.25)}
+    .nav-pill.active{background:linear-gradient(135deg,var(--lavender),var(--sky));color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(199,125,255,.35)}
 
-# ── Helper ─────────────────────────────────────────────────────────────────────
-def _encode_frame(bgr_frame: np.ndarray) -> str:
-    """Encodes an OpenCV frame as a base64 JPEG string for the browser."""
-    _, buffer = cv2.imencode(".jpg", bgr_frame)
-    return base64.b64encode(buffer).decode("utf-8")
+    /* PAGE */
+    .page-hero{text-align:center;padding:2rem 1rem 1.2rem;position:relative;z-index:1}
+    .page-title{font-family:'Fredoka One',cursive;font-size:2.5rem;color:var(--lavender);line-height:1.15}
+    .page-sub{font-size:1rem;color:var(--muted);font-weight:600;margin-top:.5rem;max-width:420px;margin-inline:auto}
+
+    /* CARDS */
+    .happy-card{background:#fff;border-radius:28px;box-shadow:0 8px 40px rgba(0,0,0,.08);overflow:hidden;position:relative;z-index:1}
+    .card-topper{padding:.9rem 1.4rem;display:flex;align-items:center;gap:.6rem}
+    .ct-violet{background:linear-gradient(135deg,#F5EEFF,#EEF5FF);border-bottom:2.5px solid rgba(199,125,255,.2)}
+    .ct-mint  {background:linear-gradient(135deg,#F0FFF4,#E8FFEE);border-bottom:2.5px solid rgba(105,219,124,.25)}
+    .ct-coral {background:linear-gradient(135deg,#FFF5F0,#FFF0F5);border-bottom:2.5px solid rgba(255,107,107,.18)}
+    .ct-title{font-family:'Fredoka One',cursive;font-size:1.05rem}
+    .ct-violet .ct-title{color:var(--lavender)}
+    .ct-mint   .ct-title{color:#2f9e44}
+    .ct-coral  .ct-title{color:var(--coral)}
+
+    /* CAMERA */
+    .cam-wrap{position:relative;background:#222;aspect-ratio:4/3;overflow:hidden}
+    #videoEl{width:100%;height:100%;object-fit:cover;display:block}
+    #previewImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+    #snapCanvas{display:none}
+
+    /* friendly guide ring — no techy brackets */
+    .guide-ring{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      width:138px;height:138px;border-radius:50%;pointer-events:none;z-index:3;
+      border:4px dashed rgba(255,217,61,.8);
+      box-shadow:0 0 28px rgba(255,217,61,.3),inset 0 0 28px rgba(255,217,61,.07);
+      animation:grPulse 2.5s ease-in-out infinite;
+    }
+    @keyframes grPulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.7}50%{transform:translate(-50%,-50%) scale(1.05);opacity:1}}
+    .guide-smiley{position:absolute;top:50%;left:50%;transform:translate(-50%,-62%);font-size:2.2rem;z-index:4;pointer-events:none;animation:smFloat 2.8s ease-in-out infinite}
+    @keyframes smFloat{0%,100%{transform:translate(-50%,-62%) scale(1)}50%{transform:translate(-50%,-70%) scale(1.12)}}
+    .guide-label{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-family:'Fredoka One',cursive;font-size:.85rem;color:rgba(255,255,255,.95);letter-spacing:.5px;white-space:nowrap;pointer-events:none;z-index:4;background:rgba(255,169,77,.7);padding:.25rem .85rem;border-radius:99px}
+
+    /* floating sparkles over cam */
+    .cam-sparkle{position:absolute;font-size:1.5rem;z-index:4;pointer-events:none;animation:cSparkle 3.5s ease-in-out infinite}
+    .cs1{top:12px;left:12px;animation-delay:0s}.cs2{top:12px;right:12px;animation-delay:1s}
+    .cs3{bottom:12px;left:12px;animation-delay:2s}.cs4{bottom:12px;right:12px;animation-delay:3s}
+    @keyframes cSparkle{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.2)}}
+
+    /* photo status bar */
+    .photo-status-bar{padding:.6rem 1.2rem .8rem;text-align:center;font-weight:700;font-size:.75rem;color:var(--muted)}
+    .photo-status-bar.ok{color:#2f9e44}
+
+    /* cam buttons */
+    .cam-btn-row{padding:.8rem 1.2rem;background:#FFF8F0;border-top:2px solid rgba(255,169,77,.2);display:flex;gap:.7rem}
+    .btn-capture{flex:1;font-family:'Fredoka One',cursive;font-size:1rem;background:linear-gradient(135deg,var(--lavender),var(--sky));color:#fff;border:none;border-radius:99px;padding:.72rem;cursor:pointer;box-shadow:0 5px 18px rgba(199,125,255,.38);transition:transform .18s,box-shadow .2s;display:flex;align-items:center;justify-content:center;gap:.45rem}
+    .btn-capture:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 8px 24px rgba(199,125,255,.5)}
+    .btn-retake{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;background:#FFF0F0;color:var(--coral);border:2.5px solid rgba(255,107,107,.3);border-radius:99px;padding:.72rem 1rem;cursor:pointer;transition:all .2s}
+    .btn-retake:hover{background:rgba(255,107,107,.1);border-color:var(--coral)}
+
+    /* FORM */
+    .form-body{padding:1.5rem 1.4rem;display:flex;flex-direction:column;gap:1.1rem}
+    .f-label{font-size:.7rem;font-weight:800;color:#c0a090;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:.4rem}
+    .f-input{width:100%;background:#FFF8F2;border:2.5px solid rgba(255,169,77,.3);color:var(--text);border-radius:14px;padding:.78rem 1.05rem;font-size:.95rem;font-family:'Nunito',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s}
+    .f-input:focus{border-color:var(--lavender);background:#fff;box-shadow:0 0 0 4px rgba(199,125,255,.12)}
+    .f-input::placeholder{color:#d0bfbf}
+    .photo-status-field{font-size:.85rem;font-weight:700;color:#d0bfbf;display:flex;align-items:center;gap:.35rem}
+    .photo-status-field.ok{color:#2f9e44}
+    .btn-register{font-family:'Fredoka One',cursive;font-size:1.15rem;background:linear-gradient(135deg,var(--mint),#20c997);color:#fff;border:none;border-radius:99px;padding:.88rem;cursor:pointer;box-shadow:0 6px 22px rgba(105,219,124,.38);transition:transform .18s,box-shadow .2s;display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%}
+    .btn-register:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 9px 28px rgba(105,219,124,.52)}
+    .btn-register:active{transform:translateY(1px) scale(.99)}
+    .btn-register:disabled{opacity:.38;pointer-events:none}
+
+    /* alerts */
+    .alert-happy{display:none;border-radius:18px;padding:.95rem 1.2rem;font-weight:700;font-size:.9rem;text-align:center}
+    .alert-happy.ok {display:block;background:linear-gradient(135deg,#F0FFF4,#DCFFE8);border:2px solid rgba(105,219,124,.45);color:#1a6e2e}
+    .alert-happy.err{display:block;background:linear-gradient(135deg,#FFF5F5,#FFE0E0);border:2px solid rgba(255,107,107,.45);color:#c0392b}
+
+    /* STEPS */
+    .steps-body{padding:1.3rem 1.4rem;display:flex;flex-direction:column;gap:.9rem}
+    .step{display:flex;gap:.85rem;align-items:flex-start}
+    .step-circle{width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Fredoka One',cursive;font-size:1rem;color:#fff}
+    .sc1{background:linear-gradient(135deg,var(--coral),var(--rose))}
+    .sc2{background:linear-gradient(135deg,var(--lavender),var(--sky))}
+    .sc3{background:linear-gradient(135deg,var(--mint),#20c997)}
+    .sc4{background:linear-gradient(135deg,var(--sun),var(--peach));color:#5a3e00}
+    .step-text{font-size:.88rem;color:var(--muted);font-weight:600;line-height:1.6;padding-top:.2rem}
+    .step-text strong{color:var(--text);font-weight:800}
+  </style>
+</head>
+<body>
+<div class="deco-circle dc1"></div>
+<div class="deco-circle dc2"></div>
+<div class="deco-circle dc3"></div>
+<div class="deco-circle dc4"></div>
+
+<nav class="happy-nav">
+  <a href="/" class="brand">😊 SmileGate <span class="brand-sub">Happiness Class</span></a>
+  <div class="nav-links">
+    <a href="/"               class="nav-pill">📷 Check In</a>
+    <a href="/register"       class="nav-pill active">✏️ Join Us</a>
+    <a href="/attendance_log" class="nav-pill">📋 Our Smiles</a>
+  </div>
+</nav>
+
+<div class="page-hero">
+  <div class="page-title">Join the Happiness Family! 🌸</div>
+  <p class="page-sub">Take a happy selfie, tell us your name, and we'll add you to our circle of joy! 🌻</p>
+</div>
+
+<div class="container-lg px-4 pb-5" style="max-width:900px;position:relative;z-index:1">
+  <div class="row g-4">
+
+    <!-- LEFT: camera + steps -->
+    <div class="col-md-6 d-flex flex-column gap-4">
+
+      <div class="happy-card">
+        <div class="card-topper ct-violet">
+          <span style="font-size:1.2rem">📸</span>
+          <span class="ct-title">Take your happiness selfie!</span>
+        </div>
+        <div class="cam-wrap">
+          <video id="videoEl" autoplay muted playsinline></video>
+          <img id="previewImg" alt="Your photo"/>
+          <canvas id="snapCanvas"></canvas>
+          <div class="guide-ring"></div> 
+          <div class="guide-label">Centre your face here 💛</div>
+          <div class="cam-sparkle cs1">🌸</div>
+          <div class="cam-sparkle cs2">⭐</div>
+          <div class="cam-sparkle cs3">🌼</div>
+          <div class="cam-sparkle cs4">💫</div>
+        </div>
+        <div class="cam-btn-row">
+          <button class="btn-capture" id="btnCapture" onclick="capturePhoto()">
+            📸 Take My Happy Photo!
+          </button>
+          <button class="btn-retake" id="btnRetake" onclick="retakePhoto()" style="display:none">
+            🔄 Retake
+          </button>
+        </div>
+        <div class="photo-status-bar" id="photoStatusBar">📷 No photo yet — smile and click above!</div>
+      </div>
+
+      <div class="happy-card">
+        <div class="card-topper ct-coral">
+          <span style="font-size:1.2rem">💡</span>
+          <span class="ct-title">How to join us!</span>
+        </div>
+        <div class="steps-body">
+          <div class="step"><div class="step-circle sc1">1</div><div class="step-text"><strong>Face the camera</strong> and make sure your face is bright and visible ☀️</div></div>
+          <div class="step"><div class="step-circle sc2">2</div><div class="step-text"><strong>Click the photo button</strong> when your face fits inside the sunny circle 🎯</div></div>
+          <div class="step"><div class="step-circle sc3">3</div><div class="step-text"><strong>Type your name</strong> and student ID below 😊</div></div>
+          <div class="step"><div class="step-circle sc4">4</div><div class="step-text"><strong>Hit Register</strong> and you're officially part of the happiness family! 🎉</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: form -->
+    <div class="col-md-6">
+      <div class="happy-card">
+        <div class="card-topper ct-mint">
+          <span style="font-size:1.2rem">📝</span>
+          <span class="ct-title">Tell us about yourself!</span>
+        </div>
+        <div class="form-body">
+          <div>
+            <label class="f-label">Your full name 😊</label>
+            <input class="f-input" type="text" id="inputName" placeholder="e.g. Priya Sharma"/>
+          </div>
+          <div>
+            <label class="f-label">Student ID number 🎓</label>
+            <input class="f-input" type="text" id="inputEnroll" placeholder="e.g. CS2024001"/>
+          </div>
+          <div>
+            <label class="f-label">Photo status 📸</label>
+            <div class="photo-status-field" id="formPhotoStatus">⚠️ Take your photo first!</div>
+          </div>
+          <button class="btn-register" id="btnRegister" onclick="submitReg()" disabled>
+            🌟 Add Me to Happiness Class!
+          </button>
+          <div class="alert-happy" id="alertOk"></div>
+          <div class="alert-happy" id="alertErr"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let capturedB64 = null;
+const video = document.getElementById('videoEl');
+
+async function initCam() {
+  try { video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+  catch (e) { alert('Camera error: ' + e.message); }
+}
+
+function capturePhoto() {
+  const c = document.getElementById('snapCanvas');
+  c.width = video.videoWidth || 640; c.height = video.videoHeight || 480;
+  c.getContext('2d').drawImage(video, 0, 0);
+  capturedB64 = c.toDataURL('image/jpeg', .9);
+  document.getElementById('previewImg').src = capturedB64;
+  document.getElementById('previewImg').style.display = 'block';
+  document.getElementById('btnCapture').style.display = 'none';
+  document.getElementById('btnRetake').style.display = 'flex';
+  const bar = document.getElementById('photoStatusBar');
+  bar.textContent = '✅ Perfect photo! Looking great! 😄'; bar.className = 'photo-status-bar ok';
+  const fps = document.getElementById('formPhotoStatus');
+  fps.textContent = '✅ Photo ready — looking wonderful!'; fps.className = 'photo-status-field ok';
+  document.getElementById('btnRegister').disabled = false;
+}
+
+function retakePhoto() {
+  capturedB64 = null;
+  document.getElementById('previewImg').style.display = 'none';
+  document.getElementById('btnCapture').style.display = 'flex';
+  document.getElementById('btnRetake').style.display = 'none';
+  const bar = document.getElementById('photoStatusBar');
+  bar.textContent = '📷 No photo yet — smile and click above!'; bar.className = 'photo-status-bar';
+  const fps = document.getElementById('formPhotoStatus');
+  fps.textContent = '⚠️ Take your photo first!'; fps.className = 'photo-status-field';
+  document.getElementById('btnRegister').disabled = true;
+}
+
+async function submitReg() {
+  const name = document.getElementById('inputName').value.trim();
+  const enroll = document.getElementById('inputEnroll').value.trim();
+  if (!name || !enroll) { showAlert('err', '⚠️ Please fill in your name and student ID!'); return; }
+  if (!capturedB64) { showAlert('err', '⚠️ Please take your photo first!'); return; }
+  const btn = document.getElementById('btnRegister');
+  btn.disabled = true; btn.textContent = '⏳ Adding you to the family…';
+  try {
+    const res = await fetch('/api/register_student', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, enrollment_no: enroll, image: capturedB64 })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      showAlert('ok', '🎉 ' + data.message + ' Welcome to the happiness family!');
+      document.getElementById('inputName').value = '';
+      document.getElementById('inputEnroll').value = '';
+      retakePhoto();
+    } else {
+      showAlert('err', '❌ ' + data.message);
+    }
+  } catch (e) { showAlert('err', 'Connection issue: ' + e.message); }
+  btn.disabled = false; btn.textContent = '🌟 Add Me to Happiness Class!';
+}
+
+function showAlert(type, msg) {
+  const ok = document.getElementById('alertOk'), err = document.getElementById('alertErr');
+  ok.className = 'alert-happy'; err.className = 'alert-happy';
+  if (type === 'ok') { ok.textContent = msg; ok.className = 'alert-happy ok'; }
+  else { err.textContent = msg; err.className = 'alert-happy err'; }
+  setTimeout(() => { ok.className = 'alert-happy'; err.className = 'alert-happy'; }, 7000);
+}
+
+initCam();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
