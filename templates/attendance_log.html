@@ -1,246 +1,306 @@
-"""
-========================================================
-  Smile-Based Smart Attendance System
-  FILE: app.py
-  PURPOSE: Flask web server that:
-             • Serves the HTML frontend
-             • Accepts webcam frames from the browser
-             • Calls the recognition engine
-             • Returns JSON results
-             • Provides routes for registration &
-               attendance log viewing
-========================================================
-"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>😊 SmileGate – Our Smiles Today</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    :root {
+      --sun:#FFD93D; --coral:#FF6B6B; --sky:#74C0FC; --mint:#69DB7C;
+      --peach:#FFA94D; --lavender:#C77DFF; --rose:#F783AC;
+      --cream:#FFFBF0; --text:#3D2C2C; --muted:#9E8585;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Nunito', sans-serif; background: var(--cream); min-height: 100vh; overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 50% 42% at 0%   0%,  rgba(105,219,124,.2) 0%,transparent 55%),
+        radial-gradient(ellipse 45% 48% at 100% 100%, rgba(116,192,252,.18) 0%,transparent 55%),
+        radial-gradient(ellipse 44% 35% at 50%   0%,  rgba(255,217,61,.18) 0%,transparent 55%),
+        radial-gradient(ellipse 40% 52% at 0%  100%,  rgba(247,131,172,.15) 0%,transparent 55%),
+        radial-gradient(ellipse 36% 40% at 100% 0%,   rgba(199,125,255,.15) 0%,transparent 55%);
+    }
+    .deco-circle{position:fixed;border-radius:50%;pointer-events:none;z-index:0;animation:floatDeco 6s ease-in-out infinite}
+    .dc1{width:80px;height:80px;background:rgba(105,219,124,.2);top:4%;left:2%;animation-delay:0s}
+    .dc2{width:55px;height:55px;background:rgba(255,217,61,.22);top:10%;right:4%;animation-delay:1s}
+    .dc3{width:65px;height:65px;background:rgba(116,192,252,.2);bottom:18%;left:5%;animation-delay:2.2s}
+    .dc4{width:45px;height:45px;background:rgba(247,131,172,.22);bottom:8%;right:3%;animation-delay:.6s}
+    @keyframes floatDeco{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
 
-from flask import (
-    Flask, render_template, request, jsonify, redirect, url_for
-)
-import sqlite3
-import os
-import base64
-import cv2
-import numpy as np
-import face_recognition
+    /* NAV */
+    .happy-nav{position:sticky;top:0;z-index:100;background:rgba(255,251,240,.92);backdrop-filter:blur(16px);border-bottom:4px solid transparent;border-image:linear-gradient(90deg,var(--sun),var(--coral),var(--rose),var(--lavender),var(--sky),var(--mint)) 1;padding:.7rem 2rem;display:flex;align-items:center;gap:1rem;box-shadow:0 4px 24px rgba(255,107,107,.1)}
+    .brand{font-family:'Fredoka One',cursive;font-size:1.7rem;color:var(--coral);text-decoration:none;display:flex;align-items:center;gap:.4rem}
+    .brand-sub{font-size:.55rem;font-weight:900;background:linear-gradient(135deg,var(--peach),var(--rose));color:#fff;padding:.2rem .6rem;border-radius:99px;letter-spacing:1px;text-transform:uppercase;font-family:'Nunito',sans-serif}
+    .nav-links{margin-left:auto;display:flex;gap:.4rem}
+    .nav-pill{font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;padding:.42rem 1rem;border-radius:99px;text-decoration:none;color:var(--muted);border:2.5px solid transparent;transition:all .25s}
+    .nav-pill:hover{color:var(--coral);background:rgba(255,107,107,.08);border-color:rgba(255,107,107,.25)}
+    .nav-pill.active{background:linear-gradient(135deg,var(--mint),var(--sky));color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(105,219,124,.35)}
 
-# Import our custom recognition engine
-from recognize_and_attend import process_frame, SMILE_THRESHOLD
+    /* PAGE HERO */
+    .page-hero{text-align:center;padding:2rem 1rem 1.2rem;position:relative;z-index:1}
+    .page-title{font-family:'Fredoka One',cursive;font-size:2.5rem;color:#2f9e44;line-height:1.15}
+    .page-sub{font-size:1rem;color:var(--muted);font-weight:600;margin-top:.5rem;max-width:420px;margin-inline:auto}
 
-# ── App setup ──────────────────────────────────────────────────────────────────
-app = Flask(__name__)
-app.secret_key = "smile_attendance_secret_key_2024"   # required for sessions
+    /* EXPORT BTN */
+    .btn-export{font-family:'Fredoka One',cursive;font-size:.95rem;background:linear-gradient(135deg,var(--mint),#20c997);color:#fff;border:none;border-radius:99px;padding:.65rem 1.4rem;cursor:pointer;box-shadow:0 5px 18px rgba(105,219,124,.38);transition:transform .18s,box-shadow .2s;display:inline-flex;align-items:center;gap:.4rem}
+    .btn-export:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(105,219,124,.5)}
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "database", "attendance.db")
+    /* STAT CARDS */
+    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;position:relative;z-index:1}
+    @media(max-width:700px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
 
+    .stat-card{background:#fff;border-radius:24px;padding:1.3rem;text-align:center;
+      box-shadow:0 6px 24px rgba(0,0,0,.07);border:3px solid transparent;
+      transition:transform .2s;position:relative;overflow:hidden}
+    .stat-card:hover{transform:translateY(-3px)}
+    .stat-card::after{content:'';position:absolute;top:-20px;right:-20px;width:75px;height:75px;border-radius:50%;opacity:.18;filter:blur(20px)}
+    .sc-coral {border-color:rgba(255,107,107,.4)} .sc-coral::after {background:var(--coral)}
+    .sc-mint  {border-color:rgba(105,219,124,.45)} .sc-mint::after  {background:var(--mint)}
+    .sc-sun   {border-color:rgba(255,217,61,.5)}  .sc-sun::after   {background:var(--sun)}
+    .sc-violet{border-color:rgba(199,125,255,.4)} .sc-violet::after{background:var(--lavender)}
+    .sc-emoji{font-size:1.85rem;display:block;margin-bottom:.4rem}
+    .sc-number{font-family:'Fredoka One',cursive;font-size:2.2rem;display:block;line-height:1;margin-bottom:.15rem}
+    .sc-number.coral {color:var(--coral)} .sc-number.mint{color:#2f9e44}
+    .sc-number.sun   {color:#b07800}      .sc-number.violet{color:var(--lavender)}
+    .sc-label{font-size:.62rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 
-# ── Database helper ────────────────────────────────────────────────────────────
-def get_db():
-    """Opens and returns a database connection with dict-like row access."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    /* MAIN GRID */
+    .content-grid{display:grid;grid-template-columns:1fr 285px;gap:1.3rem;position:relative;z-index:1}
+    @media(max-width:860px){.content-grid{grid-template-columns:1fr}}
 
+    /* CARDS */
+    .happy-card{background:#fff;border-radius:28px;box-shadow:0 8px 36px rgba(0,0,0,.07);overflow:hidden}
+    .happy-card.mint-border {border:3px solid rgba(105,219,124,.3)}
+    .happy-card.coral-border{border:3px solid rgba(255,107,107,.25)}
+    .card-topper{padding:.9rem 1.4rem;display:flex;align-items:center;gap:.6rem}
+    .ct-mint {background:linear-gradient(135deg,#F0FFF4,#E8FFEE);border-bottom:2.5px solid rgba(105,219,124,.25)}
+    .ct-coral{background:linear-gradient(135deg,#FFF5F0,#FFF0F5);border-bottom:2.5px solid rgba(255,107,107,.18)}
+    .ct-title{font-family:'Fredoka One',cursive;font-size:1.05rem}
+    .ct-mint  .ct-title{color:#2f9e44}
+    .ct-coral .ct-title{color:var(--coral)}
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  FRONTEND ROUTES
-# ══════════════════════════════════════════════════════════════════════════════
+    /* search */
+    .search-happy{margin-left:auto;background:#FFF8F2;border:2px solid rgba(255,169,77,.3);color:var(--text);border-radius:99px;padding:.34rem 1rem;font-size:.82rem;font-family:'Nunito',sans-serif;outline:none;width:200px;transition:border-color .2s}
+    .search-happy:focus{border-color:var(--lavender);background:#fff}
+    .search-happy::placeholder{color:#d0bfbf}
 
-@app.route("/")
-def index():
-    """Home page – displays the live attendance scanner."""
-    return render_template("index.html", smile_threshold=SMILE_THRESHOLD)
+    /* TABLE */
+    .table-wrap{overflow-x:auto}
+    .att-table{width:100%;border-collapse:collapse}
+    .att-table th{padding:.7rem 1.1rem;text-align:left;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:2.5px solid rgba(0,0,0,.06)}
+    .att-table td{padding:.75rem 1.1rem;border-bottom:1.5px solid rgba(0,0,0,.04);font-size:.88rem;vertical-align:middle}
+    .att-table tr:last-child td{border-bottom:none}
+    .att-table tr:hover td{background:rgba(105,219,124,.04)}
+    .t-idx{font-size:.72rem;color:#d0bfbf;font-weight:700}
+    .t-name{font-weight:800;color:var(--text);font-size:.9rem}
+    .t-date,.t-time{font-size:.76rem;color:var(--muted);font-weight:600}
+    .id-badge{display:inline-block;padding:.22rem .65rem;border-radius:99px;background:rgba(116,192,252,.15);color:#1971c2;border:1.5px solid rgba(116,192,252,.35);font-size:.73rem;font-weight:800}
 
+    /* smile bar */
+    .smile-row{display:flex;align-items:center;gap:.6rem}
+    .smile-track-bg{flex:1;height:10px;background:#F5EFE0;border-radius:99px;overflow:hidden;min-width:50px}
+    .smile-track-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--sun),var(--mint))}
+    .smile-pct{font-family:'Fredoka One',cursive;font-size:.82rem;color:#2f9e44;width:46px;flex-shrink:0}
+    .table-empty{text-align:center;padding:3.5rem;font-size:.95rem;color:var(--muted);font-weight:700}
 
-@app.route("/register")
-def register_page():
-    """Student registration page – capture face and save to DB."""
-    return render_template("register.html")
+    /* STUDENTS SIDEBAR */
+    .stu-scroll{overflow-y:auto;max-height:540px}
+    .stu-scroll::-webkit-scrollbar{width:4px}
+    .stu-scroll::-webkit-scrollbar-thumb{background:#F0E8E0;border-radius:2px}
+    .stu-row{padding:.72rem 1.2rem;border-bottom:1.5px solid rgba(0,0,0,.04);display:flex;align-items:center;gap:.65rem;transition:background .15s}
+    .stu-row:last-child{border-bottom:none}
+    .stu-row:hover{background:rgba(255,107,107,.03)}
+    .stu-avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;font-weight:900;font-size:.78rem;color:#fff;display:flex;align-items:center;justify-content:center}
+    .av0{background:linear-gradient(135deg,var(--coral),var(--rose))}
+    .av1{background:linear-gradient(135deg,var(--mint),#20c997)}
+    .av2{background:linear-gradient(135deg,var(--sun),var(--peach));color:#5a3e00}
+    .av3{background:linear-gradient(135deg,var(--sky),var(--lavender))}
+    .stu-name{font-weight:800;font-size:.86rem;color:var(--text)}
+    .stu-id{font-size:.65rem;color:var(--muted);font-weight:600}
+    .del-btn{margin-left:auto;background:none;border:none;color:#e0d0d0;cursor:pointer;font-size:1rem;padding:.22rem .38rem;border-radius:99px;transition:all .2s}
+    .del-btn:hover{color:var(--coral);background:rgba(255,107,107,.1)}
+    .stu-empty{padding:2.5rem;text-align:center;font-size:.9rem;color:var(--muted);font-weight:700}
+  </style>
+</head>
+<body>
+<div class="deco-circle dc1"></div>
+<div class="deco-circle dc2"></div>
+<div class="deco-circle dc3"></div>
+<div class="deco-circle dc4"></div>
 
+<nav class="happy-nav">
+  <a href="/" class="brand">😊 SmileGate <span class="brand-sub">Happiness Class</span></a>
+  <div class="nav-links">
+    <a href="/"               class="nav-pill">📷 Check In</a>
+    <a href="/register"       class="nav-pill">✏️ Join Us</a>
+    <a href="/attendance_log" class="nav-pill active">📋 Our Smiles</a>
+  </div>
+</nav>
 
-@app.route("/attendance_log")
-def attendance_log():
-    """
-    Attendance log page – displays all attendance records joined
-    with student information.
-    """
-    conn = get_db()
-    records = conn.execute("""
-        SELECT
-            s.name,
-            s.enrollment_no,
-            a.date,
-            a.time,
-            a.smile_score
-        FROM attendance a
-        JOIN students s ON a.student_id = s.id
-        ORDER BY a.date DESC, a.time DESC
-    """).fetchall()
+<div class="page-hero">
+  <div class="page-title">Our Happiness Journey 🌻</div>
+  <p class="page-sub">Look at all these beautiful smiles! Every check-in is a reason to celebrate 🎉</p>
+</div>
 
-    # Fetch all registered students for the sidebar summary
-    students = conn.execute(
-        "SELECT id, name, enrollment_no, registered_at FROM students ORDER BY name"
-    ).fetchall()
-    conn.close()
+<div class="container-xl px-4 pb-5" style="max-width:1150px;position:relative;z-index:1">
 
-    return render_template(
-        "attendance_log.html",
-        records=records,
-        students=students
-    )
+  <!-- top bar -->
+  <div class="d-flex align-items-center gap-3 flex-wrap mb-4">
+    <div style="font-family:'Fredoka One',cursive;font-size:1.1rem;color:var(--muted)">All smiles recorded, most recent first 😄</div>
+    <div class="ms-auto">
+      <button class="btn-export" onclick="exportCSV()">💾 Save as Spreadsheet</button>
+    </div>
+  </div>
 
+  <!-- STAT CARDS -->
+  <div class="stat-grid">
+    <div class="stat-card sc-coral">
+      <span class="sc-emoji">👫</span>
+      <span class="sc-number coral">{{ students|length }}</span>
+      <span class="sc-label">Happy Members</span>
+    </div>
+    <div class="stat-card sc-mint">
+      <span class="sc-emoji">📋</span>
+      <span class="sc-number mint">{{ records|length }}</span>
+      <span class="sc-label">Total Check-ins</span>
+    </div>
+    <div class="stat-card sc-sun">
+      <span class="sc-emoji">🌟</span>
+      {% if records %}
+        <span class="sc-number sun">{{ records|selectattr('date','equalto',records[0].date)|list|length }}</span>
+      {% else %}
+        <span class="sc-number sun">0</span>
+      {% endif %}
+      <span class="sc-label">Smiles Today</span>
+    </div>
+    <div class="stat-card sc-violet">
+      <span class="sc-emoji">😄</span>
+      {% if records %}
+        {% set avg = (records|sum(attribute='smile_score')) / records|length %}
+        <span class="sc-number violet">{{ "%.0f"|format(avg) }}%</span>
+      {% else %}
+        <span class="sc-number violet">—</span>
+      {% endif %}
+      <span class="sc-label">Avg Happiness</span>
+    </div>
+  </div>
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  API ROUTES (called from JavaScript in the browser)
-# ══════════════════════════════════════════════════════════════════════════════
+  <!-- CONTENT -->
+  <div class="content-grid">
 
-@app.route("/api/recognize", methods=["POST"])
-def api_recognize():
-    """
-    Receives a base64-encoded JPEG frame from the browser.
-    Passes it to the recognition engine and returns the result as JSON.
+    <!-- table -->
+    <div class="happy-card mint-border">
+      <div class="card-topper ct-mint">
+        <span style="font-size:1.2rem">🌈</span>
+        <span class="ct-title">All the smiles we've recorded!</span>
+        <input class="search-happy" type="text" id="searchBox" placeholder="🔍 Search by name…" oninput="filterTable()"/>
+      </div>
+      <div class="table-wrap">
+        <table class="att-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name 😊</th>
+              <th>Student ID</th>
+              <th>Date 📅</th>
+              <th>Time ⏰</th>
+              <th>Happiness Score 😄</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            {% if records %}
+              {% for r in records %}
+              <tr>
+                <td class="t-idx">{{ loop.index }}</td>
+                <td class="t-name">{{ r.name }}</td>
+                <td><span class="id-badge">{{ r.enrollment_no }}</span></td>
+                <td class="t-date">{{ r.date }}</td>
+                <td class="t-time">{{ r.time }}</td>
+                <td>
+                  <div class="smile-row">
+                    <div class="smile-track-bg">
+                      <div class="smile-track-fill" style="width:{{ r.smile_score|round(0)|int }}%"></div>
+                    </div>
+                    <span class="smile-pct">{{ "%.0f"|format(r.smile_score) }}%</span>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td class="table-empty" colspan="6">
+                  😊 No check-ins yet!<br>
+                  <span style="font-size:.9rem">Go to the Check In page to start recording smiles! 🌟</span>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-    Expected JSON body:
-      { "image": "<base64 JPEG string>" }
-    """
-    data = request.get_json()
+    <!-- students sidebar -->
+    <div class="happy-card coral-border" style="align-self:start">
+      <div class="card-topper ct-coral">
+        <span style="font-size:1.2rem">💛</span>
+        <span class="ct-title">Our Happy Family</span>
+      </div>
+      <div class="stu-scroll">
+        {% if students %}
+          {% for s in students %}
+          <div class="stu-row" id="stu-{{ s.id }}">
+            {% set avcls = ['av0','av1','av2','av3'] %}
+            <div class="stu-avatar {{ avcls[loop.index0 % 4] }}">
+              {{ s.name.split(' ')|map('first')|join('')|upper|truncate(2,True,'') }}
+            </div>
+            <div>
+              <div class="stu-name">{{ s.name }}</div>
+              <div class="stu-id">{{ s.enrollment_no }}</div>
+            </div>
+            <button class="del-btn" onclick="delStudent({{ s.id }},'{{ s.name }}')" title="Remove">
+              🗑️
+            </button>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="stu-empty">No members yet! 🌻<br>Head to "Join Us" to register!</div>
+        {% endif %}
+      </div>
+    </div>
 
-    if not data or "image" not in data:
-        return jsonify({"status": "error", "message": "No image data received."}), 400
+  </div>
+</div>
 
-    # Strip the data-URI prefix if present (e.g. "data:image/jpeg;base64,...")
-    image_b64 = data["image"]
-    if "," in image_b64:
-        image_b64 = image_b64.split(",")[1]
-
-    # Decode base64 → raw bytes
-    try:
-        jpeg_bytes = base64.b64decode(image_b64)
-    except Exception:
-        return jsonify({"status": "error", "message": "Invalid base64 image."}), 400
-
-    # Run the full recognition + attendance pipeline
-    result = process_frame(jpeg_bytes)
-    return jsonify(result)
-
-
-@app.route("/api/register_student", methods=["POST"])
-def api_register_student():
-    """
-    Receives a student's name, enrollment number, and a base64 JPEG frame.
-    Generates the face encoding and stores the student in the database.
-
-    Expected JSON body:
-      {
-        "name": "John Doe",
-        "enrollment_no": "CS2024001",
-        "image": "<base64 JPEG string>"
-      }
-    """
-    data = request.get_json()
-
-    # ── Validate input ─────────────────────────────────────────────────────────
-    name = (data.get("name") or "").strip()
-    enrollment_no = (data.get("enrollment_no") or "").strip()
-    image_b64 = data.get("image", "")
-
-    if not name or not enrollment_no or not image_b64:
-        return jsonify({
-            "status": "error",
-            "message": "Name, enrollment number, and image are all required."
-        }), 400
-
-    # Strip data-URI prefix
-    if "," in image_b64:
-        image_b64 = image_b64.split(",")[1]
-
-    # ── Decode image ───────────────────────────────────────────────────────────
-    try:
-        jpeg_bytes = base64.b64decode(image_b64)
-        np_arr = np.frombuffer(jpeg_bytes, np.uint8)
-        bgr_frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Image decode failed: {e}"}), 400
-
-    if bgr_frame is None:
-        return jsonify({"status": "error", "message": "Could not decode image."}), 400
-
-    # ── Generate face encoding ─────────────────────────────────────────────────
-    rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
-    face_locations = face_recognition.face_locations(rgb_frame)
-
-    if not face_locations:
-        return jsonify({
-            "status": "error",
-            "message": "No face detected in the image. Please try again."
-        }), 400
-
-    encodings = face_recognition.face_encodings(rgb_frame, face_locations)
-    encoding_str = ",".join(map(str, encodings[0].tolist()))
-
-    # ── Save to database ───────────────────────────────────────────────────────
-    try:
-        conn = get_db()
-        conn.execute(
-            "INSERT INTO students (name, enrollment_no, face_encoding) VALUES (?, ?, ?)",
-            (name, enrollment_no, encoding_str)
-        )
-        conn.commit()
-        conn.close()
-    except sqlite3.IntegrityError:
-        return jsonify({
-            "status": "error",
-            "message": f"Enrollment number '{enrollment_no}' already exists."
-        }), 409
-
-    return jsonify({
-        "status": "success",
-        "message": f"Student '{name}' registered successfully!"
-    })
-
-
-@app.route("/api/students", methods=["GET"])
-def api_students():
-    """Returns a JSON list of all registered students (without encodings)."""
-    conn = get_db()
-    rows = conn.execute(
-        "SELECT id, name, enrollment_no, registered_at FROM students ORDER BY name"
-    ).fetchall()
-    conn.close()
-    return jsonify([dict(r) for r in rows])
-
-
-@app.route("/api/attendance", methods=["GET"])
-def api_attendance():
-    """Returns a JSON list of all attendance records (most recent first)."""
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT s.name, s.enrollment_no, a.date, a.time, a.smile_score
-        FROM attendance a
-        JOIN students s ON a.student_id = s.id
-        ORDER BY a.date DESC, a.time DESC
-        LIMIT 50
-    """).fetchall()
-    conn.close()
-    return jsonify([dict(r) for r in rows])
-
-
-@app.route("/api/delete_student/<int:student_id>", methods=["DELETE"])
-def api_delete_student(student_id):
-    """Deletes a student and their attendance records from the database."""
-    conn = get_db()
-    conn.execute("DELETE FROM attendance WHERE student_id = ?", (student_id,))
-    conn.execute("DELETE FROM students WHERE id = ?", (student_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "success", "message": "Student deleted."})
-
-
-# ── Run the server ─────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    # Ensure the database exists before starting
-    if not os.path.exists(DB_PATH):
-        print("⚠️  Database not found. Run `python setup_database.py` first.")
-    else:
-        print("✅ Database found.")
-
-    print("🚀 Starting Smile Attendance System at http://127.0.0.1:5000")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+<script>
+function filterTable() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  document.querySelectorAll('#tableBody tr').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+async function delStudent(id, name) {
+  if (!confirm(`Remove ${name} from the happiness family?`)) return;
+  try {
+    const r = await fetch(`/api/delete_student/${id}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.status === 'success') document.getElementById(`stu-${id}`)?.remove();
+    else alert('Could not remove: ' + d.message);
+  } catch { alert('Connection issue — please try again.'); }
+}
+function exportCSV() {
+  const rows = [['Name','Student ID','Date','Time','Happiness Score']];
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    const tds = [...tr.querySelectorAll('td')];
+    if (tds.length > 1) rows.push([tds[1].textContent.trim(), tds[2].textContent.trim(), tds[3].textContent.trim(), tds[4].textContent.trim(), tds[5].textContent.trim()]);
+  });
+  const blob = new Blob([rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'happiness_attendance.csv'; a.click();
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
