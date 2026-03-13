@@ -1,295 +1,566 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SmileGate – Attendance Log</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>😊 SmileGate – Happiness Check-In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
     :root {
-      --bg:        #0a0c10;
-      --surface:   #111318;
-      --border:    #1e2128;
-      --accent:    #00e5a0;
-      --accent2:   #7b61ff;
-      --warn:      #ff6b35;
-      --text:      #e8eaf0;
-      --muted:     #5a6070;
-      --font-head: 'Syne', sans-serif;
-      --font-mono: 'DM Mono', monospace;
+      --sun:     #FFD93D;
+      --coral:   #FF6B6B;
+      --sky:     #74C0FC;
+      --mint:    #69DB7C;
+      --peach:   #FFA94D;
+      --lavender:#C77DFF;
+      --rose:    #F783AC;
+      --cream:   #FFFBF0;
+      --warm:    #FFF3E0;
+      --text:    #3D2C2C;
+      --muted:   #9E8585;
     }
-    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-    body { background:var(--bg); color:var(--text); font-family:var(--font-head); min-height:100vh; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--cream);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── big warm gradient background ── */
     body::before {
-      content:''; position:fixed; inset:0;
-      background-image:
-        linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
-      background-size: 48px 48px;
-      pointer-events:none; z-index:0;
-    }
-    nav {
-      position:sticky; top:0; z-index:100;
-      background:rgba(10,12,16,.85); backdrop-filter:blur(16px);
-      border-bottom:1px solid var(--border);
-      padding:.75rem 2rem; display:flex; align-items:center; gap:2rem;
-    }
-    .brand { font-size:1.25rem; font-weight:800; color:var(--accent);
-             letter-spacing:-.5px; display:flex; align-items:center; gap:.5rem; }
-    .brand span { color:var(--text); }
-    .nav-links { display:flex; gap:1.25rem; margin-left:auto; }
-    .nav-links a { color:var(--muted); text-decoration:none; font-size:.875rem; font-weight:600;
-                   transition:color .2s; display:flex; align-items:center; gap:.35rem; }
-    .nav-links a:hover, .nav-links a.active { color:var(--accent); }
-
-    .page-wrap {
-      position:relative; z-index:1;
-      max-width:1100px; margin:2.5rem auto;
-      padding:0 1.5rem 4rem;
-    }
-    .page-header { display:flex; align-items:flex-end; gap:2rem; margin-bottom:2rem; }
-    .page-title { font-size:2rem; font-weight:800; }
-    .page-sub { color:var(--muted); font-size:.9rem; }
-    .page-actions { margin-left:auto; display:flex; gap:.75rem; }
-
-    .btn-export {
-      background:var(--border); color:var(--text);
-      border:1px solid var(--border); border-radius:10px;
-      padding:.6rem 1rem; font-family:var(--font-head);
-      font-weight:600; font-size:.82rem; cursor:pointer;
-      transition:background .2s; text-decoration:none;
-      display:flex; align-items:center; gap:.4rem;
-    }
-    .btn-export:hover { background:#252830; color:var(--text); }
-
-    /* ── Summary cards ──────────────────── */
-    .summary-row { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.75rem; }
-    @media (max-width:700px) { .summary-row { grid-template-columns:repeat(2,1fr); } }
-    .sum-card {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:14px; padding:1rem 1.25rem;
-    }
-    .sum-val { font-size:2rem; font-weight:800; color:var(--accent); font-family:var(--font-mono); }
-    .sum-lbl { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-top:.1rem; }
-
-    /* ── Layout ─────────────────────────── */
-    .log-layout { display:grid; grid-template-columns:1fr 280px; gap:1.5rem; }
-    @media (max-width:850px) { .log-layout { grid-template-columns:1fr; } }
-
-    /* ── Table ──────────────────────────── */
-    .panel {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:16px; overflow:hidden;
-    }
-    .panel-header {
-      padding:.85rem 1.25rem; border-bottom:1px solid var(--border);
-      font-size:.75rem; font-weight:700; text-transform:uppercase;
-      letter-spacing:1px; color:var(--muted);
-      display:flex; align-items:center; gap:.5rem;
-    }
-    .search-input {
-      margin-left:auto; background:#0d0f14; border:1px solid var(--border);
-      color:var(--text); border-radius:8px; padding:.35rem .75rem;
-      font-family:var(--font-mono); font-size:.78rem; outline:none;
-      width:180px; transition:border-color .2s;
-    }
-    .search-input:focus { border-color:var(--accent2); }
-    .search-input::placeholder { color:var(--muted); }
-
-    .att-table { width:100%; border-collapse:collapse; }
-    .att-table th {
-      padding:.7rem 1rem; text-align:left;
-      font-size:.68rem; font-weight:700; text-transform:uppercase;
-      letter-spacing:.5px; color:var(--muted);
-      border-bottom:1px solid var(--border);
-    }
-    .att-table td {
-      padding:.75rem 1rem; border-bottom:1px solid var(--border);
-      font-size:.85rem; vertical-align:middle;
-    }
-    .att-table tr:last-child td { border-bottom:none; }
-    .att-table tr:hover td { background:rgba(255,255,255,.02); }
-
-    .enroll-chip {
-      font-family:var(--font-mono); font-size:.72rem;
-      padding:.2rem .55rem; border-radius:6px;
-      background:rgba(123,97,255,.1); color:var(--accent2);
-    }
-    .score-bar-wrap { display:flex; align-items:center; gap:.6rem; }
-    .score-bar {
-      flex:1; height:5px; background:var(--border);
-      border-radius:99px; overflow:hidden;
-    }
-    .score-fill {
-      height:100%;
-      background:linear-gradient(90deg, var(--accent2), var(--accent));
-      border-radius:99px;
-    }
-    .score-txt { font-family:var(--font-mono); font-size:.75rem; color:var(--accent); width:38px; }
-
-    .empty-row td {
-      text-align:center; padding:3rem;
-      color:var(--muted); font-size:.9rem;
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 45% at 0%   0%,  rgba(255,217,61,.28)  0%, transparent 55%),
+        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(255,107,107,.18) 0%, transparent 55%),
+        radial-gradient(ellipse 45% 40% at 50%  0%,  rgba(247,131,172,.15) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 50% at 0%  100%, rgba(105,219,124,.18) 0%, transparent 55%),
+        radial-gradient(ellipse 35% 40% at 100% 0%,  rgba(116,192,252,.18) 0%, transparent 55%);
     }
 
-    /* ── Student sidebar ──────────────────── */
-    .stu-list { padding:0; max-height:480px; overflow-y:auto; }
-    .stu-list::-webkit-scrollbar { width:4px; }
-    .stu-list::-webkit-scrollbar-thumb { background:var(--border); }
-    .stu-item {
-      padding:.75rem 1.1rem; border-bottom:1px solid var(--border);
-      display:flex; align-items:center; gap:.7rem;
+    /* ── floating decoration circles ── */
+    .deco-circle {
+      position: fixed; border-radius: 50%; pointer-events: none; z-index: 0;
+      animation: floatDeco 6s ease-in-out infinite;
     }
-    .stu-item:last-child { border-bottom:none; }
-    .stu-avatar {
-      width:34px; height:34px; border-radius:50%;
-      background:rgba(0,229,160,.1); border:1px solid rgba(0,229,160,.2);
-      color:var(--accent); font-size:.75rem; font-weight:800;
-      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    .dc1 { width:90px;height:90px; background:rgba(255,217,61,.22); top:5%;  left:3%;  animation-delay:0s; }
+    .dc2 { width:60px;height:60px; background:rgba(247,131,172,.2); top:12%; right:5%; animation-delay:1.2s; }
+    .dc3 { width:75px;height:75px; background:rgba(105,219,124,.2); bottom:15%; left:6%; animation-delay:2.5s; }
+    .dc4 { width:50px;height:50px; background:rgba(116,192,252,.22); bottom:10%; right:3%; animation-delay:0.8s; }
+    .dc5 { width:40px;height:40px; background:rgba(255,169,77,.22); top:45%; left:1%;  animation-delay:3.5s; }
+    .dc6 { width:55px;height:55px; background:rgba(199,125,255,.18); top:60%; right:2%; animation-delay:2s; }
+    @keyframes floatDeco {
+      0%,100% { transform: translateY(0px) scale(1); }
+      50%      { transform: translateY(-16px) scale(1.08); }
     }
-    .stu-name { font-size:.83rem; font-weight:600; }
-    .stu-enroll { font-family:var(--font-mono); font-size:.7rem; color:var(--muted); }
-    .stu-del {
-      margin-left:auto; background:none; border:none;
-      color:var(--muted); cursor:pointer; font-size:.9rem;
-      transition:color .2s;
+
+    /* ── NAVBAR ── */
+    .happy-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,251,240,.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 4px solid transparent;
+      border-image: linear-gradient(90deg, var(--sun), var(--coral), var(--rose), var(--lavender), var(--sky), var(--mint)) 1;
+      padding: .7rem 2rem;
+      display: flex; align-items: center; gap: 1rem;
+      box-shadow: 0 4px 24px rgba(255,107,107,.1);
     }
-    .stu-del:hover { color:var(--warn); }
+    .brand {
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.7rem; color: var(--coral);
+      text-decoration: none; letter-spacing: .5px;
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .brand-sub {
+      font-size: .55rem; font-weight: 900;
+      background: linear-gradient(135deg, var(--peach), var(--rose));
+      color: #fff; padding: .2rem .6rem; border-radius: 99px;
+      letter-spacing: 1px; text-transform: uppercase;
+      font-family: 'Nunito', sans-serif;
+    }
+    .nav-links { margin-left: auto; display: flex; gap: .4rem; }
+    .nav-pill {
+      font-family: 'Nunito', sans-serif; font-weight: 800; font-size: .85rem;
+      padding: .42rem 1rem; border-radius: 99px; text-decoration: none;
+      color: var(--muted); border: 2.5px solid transparent;
+      transition: all .25s; display: flex; align-items: center; gap: .3rem;
+    }
+    .nav-pill:hover { color: var(--coral); background: rgba(255,107,107,.08); border-color: rgba(255,107,107,.25); }
+    .nav-pill.active { background: linear-gradient(135deg, var(--coral), var(--rose)); color: #fff; border-color: transparent; box-shadow: 0 4px 14px rgba(255,107,107,.35); }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center; padding: 2.2rem 1rem 1rem;
+      position: relative; z-index: 1;
+    }
+    .hero-headline {
+      font-family: 'Fredoka One', cursive;
+      font-size: 2.6rem; color: var(--coral);
+      line-height: 1.15; letter-spacing: .5px;
+    }
+    .hero-sub {
+      font-size: 1rem; color: var(--muted); font-weight: 600;
+      margin-top: .5rem; max-width: 480px; margin-inline: auto;
+    }
+
+    /* ── HAPPY STATS ── */
+    .stats-row {
+      display: flex; justify-content: center; gap: 1rem;
+      flex-wrap: wrap; padding: .8rem 1.5rem 1rem;
+      position: relative; z-index: 1;
+    }
+    .stat-bubble {
+      background: #fff; border-radius: 22px;
+      padding: 1rem 1.4rem;
+      text-align: center;
+      box-shadow: 0 6px 24px rgba(0,0,0,.07);
+      border: 3px solid transparent;
+      min-width: 110px;
+    }
+    .stat-bubble.sb-sun    { border-color: rgba(255,217,61,.6);  }
+    .stat-bubble.sb-coral  { border-color: rgba(255,107,107,.5); }
+    .stat-bubble.sb-mint   { border-color: rgba(105,219,124,.55);}
+    .sb-emoji { font-size: 1.6rem; line-height: 1; display: block; margin-bottom: .3rem; }
+    .sb-num {
+      font-family: 'Fredoka One', cursive; font-size: 2rem; line-height: 1; display: block;
+    }
+    .sb-num.sun   { color: #e6a800; }
+    .sb-num.coral { color: var(--coral); }
+    .sb-num.mint  { color: #2f9e44; }
+    .sb-lbl { font-size: .65rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: .15rem; display: block; }
+
+    /* ── MAIN GRID ── */
+    .main-grid {
+      display: grid; grid-template-columns: 480px 1fr; gap: 1.3rem;
+      padding: 0 1.5rem 3rem; position: relative; z-index: 1;
+    }
+    @media(max-width: 920px) { .main-grid { grid-template-columns: 1fr; } }
+
+    /* ── CAMERA CARD ── */
+    .happy-card {
+      background: #fff; border-radius: 28px;
+      box-shadow: 0 8px 40px rgba(255,107,107,.1), 0 2px 12px rgba(0,0,0,.05);
+      overflow: hidden;
+    }
+    .card-topper {
+      padding: 1rem 1.4rem;
+      background: linear-gradient(135deg, #FFF0E0, #FFF0F5);
+      border-bottom: 2.5px solid rgba(255,107,107,.12);
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .card-topper-title {
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.1rem; color: var(--coral);
+    }
+    .recording-dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--coral); margin-left: auto;
+      box-shadow: 0 0 0 4px rgba(255,107,107,.2);
+      animation: recPulse 1.5s infinite;
+    }
+    @keyframes recPulse { 0%,100%{box-shadow:0 0 0 4px rgba(255,107,107,.2)} 50%{box-shadow:0 0 0 8px rgba(255,107,107,.05)} }
+
+    /* viewport */
+    .cam-box {
+      position: relative; background: #222;
+      aspect-ratio: 4/3; overflow: hidden;
+      width: 100%;
+    }
+    #videoEl {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    #annotatedImg {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; opacity: 0; transition: opacity .4s; z-index: 2;
+    }
+    #annotatedImg.show { opacity: 1; }
+
+    /* soft warm vignette */
+    .cam-vign {
+      position: absolute; inset: 0; z-index: 3; pointer-events: none;
+      background: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 50%, rgba(255,251,240,.38) 100%);
+    }
+
+    /* face guide — friendly circle, no techy brackets */
+    .face-guide {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 175px; height: 175px; border-radius: 50%; z-index: 3; pointer-events: none;
+      border: 4px dashed rgba(255,217,61,.8);
+      box-shadow: 0 0 30px rgba(255,217,61,.3), inset 0 0 30px rgba(255,217,61,.08);
+      animation: guidePulse 2.5s ease-in-out infinite;
+    }
+    @keyframes guidePulse {
+      0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .75; }
+      50%      { transform: translate(-50%,-50%) scale(1.04); opacity: 1; }
+    }
+
+    /* floating sparkles — softer, rounder, no sharp brackets */
+    .sparkle {
+      position: absolute; font-size: 1.8rem; z-index: 4; pointer-events: none;
+      animation: sparkleFloat 3.5s ease-in-out infinite;
+    }
+    .sp1 { top: 14px; left: 14px; animation-delay: 0s; }
+    .sp2 { top: 14px; right: 14px; animation-delay: .9s; }
+    .sp3 { bottom: 14px; left: 14px; animation-delay: 1.8s; }
+    .sp4 { bottom: 14px; right: 14px; animation-delay: 2.7s; }
+    @keyframes sparkleFloat { 0%,100%{transform:translateY(0) scale(1) rotate(0deg)} 50%{transform:translateY(-10px) scale(1.2) rotate(12deg)} }
+
+    /* scanning overlay — friendly, no harsh dark */
+    .scan-overlay {
+      position: absolute; inset: 0; z-index: 8;
+      background: rgba(255,251,240,.86); backdrop-filter: blur(8px);
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+    }
+    .scan-overlay.on { display: flex; }
+    .scan-spinner {
+      width: 68px; height: 68px; border-radius: 50%;
+      border: 5px solid rgba(255,217,61,.3);
+      border-top-color: var(--sun); border-right-color: var(--coral);
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .scan-msg {
+      font-family: 'Fredoka One', cursive; font-size: 1.1rem; color: var(--coral);
+      animation: msgBlink 1.2s ease-in-out infinite;
+    }
+    @keyframes msgBlink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* result flash */
+    .flash-layer { position: absolute; inset: 0; z-index: 9; opacity: 0; pointer-events: none; transition: opacity .2s; }
+    .flash-layer.happy { background: rgba(105,219,124,.28); }
+    .flash-layer.sad   { background: rgba(255,107,107,.18); }
+    .flash-layer.on    { opacity: 1; }
+    .confetti-piece { position: absolute; width: 9px; height: 9px; border-radius: 50%; z-index: 10; pointer-events: none; }
+    @keyframes confettiFall { 0%{opacity:1;transform:translateY(0) rotate(0)} 100%{opacity:0;transform:translateY(-100px) rotate(450deg)} }
+
+    /* ── STATUS SECTION ── */
+    .status-section {
+      padding: 1rem 1.4rem;
+      background: #FFFBF5;
+      border-top: 2.5px solid rgba(255,217,61,.25);
+      display: flex; align-items: center; gap: 1rem; min-height: 82px;
+    }
+    .status-big-emoji {
+      font-size: 3.2rem; flex-shrink: 0;
+      filter: drop-shadow(0 3px 10px rgba(255,107,107,.2));
+    }
+    .status-big-emoji.pop { animation: emoPop .5s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes emoPop { 0%{transform:scale(.3) rotate(-25deg)} 65%{transform:scale(1.3) rotate(5deg)} 100%{transform:scale(1)} }
+    .status-text-block { flex: 1; }
+    .status-title { font-family: 'Fredoka One', cursive; font-size: 1.1rem; transition: color .3s; }
+    .status-desc  { font-size: .8rem; color: var(--muted); font-weight: 600; margin-top: .1rem; }
+
+    /* happiness meter */
+    .happiness-meter { min-width: 130px; display: flex; flex-direction: column; gap: .35rem; }
+    .hm-label { font-size: .65rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .4px;
+      display: flex; justify-content: space-between; }
+    .hm-label .hm-val { color: var(--mint); font-family: 'Fredoka One', cursive; font-size: .78rem; }
+    .hm-track { height: 12px; background: #F0ECE0; border-radius: 99px; overflow: hidden; }
+    .hm-fill {
+      height: 100%; width: 0%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--sun), var(--mint));
+      transition: width .9s cubic-bezier(.34,1.56,.64,1);
+    }
+    .hm-fill.low { background: linear-gradient(90deg, var(--coral), var(--rose)); }
+
+    /* ── BIG SCAN BUTTON ── */
+    .action-section {
+      padding: .9rem 1.4rem;
+      background: #FFFBF5;
+      border-top: 2px solid rgba(0,0,0,.05);
+      display: flex; gap: .7rem; align-items: center;
+    }
+    .btn-smile {
+      flex: 1; font-family: 'Fredoka One', cursive; font-size: 1.15rem;
+      background: linear-gradient(135deg, var(--coral) 0%, var(--rose) 100%);
+      color: #fff; border: none; border-radius: 99px;
+      padding: .85rem 1.5rem; cursor: pointer; letter-spacing: .5px;
+      box-shadow: 0 6px 22px rgba(255,107,107,.38);
+      transition: transform .18s, box-shadow .2s;
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      position: relative; overflow: hidden;
+    }
+    .btn-smile:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 10px 30px rgba(255,107,107,.5); }
+    .btn-smile:active { transform: translateY(1px) scale(.98); }
+    .btn-smile.loading { opacity: .55; pointer-events: none; }
+
+    .btn-auto {
+      font-family: 'Nunito', sans-serif; font-weight: 800; font-size: .82rem;
+      background: #FFF0E0; color: var(--peach);
+      border: 2.5px solid rgba(255,169,77,.4); border-radius: 99px;
+      padding: .8rem 1.1rem; cursor: pointer; transition: all .2s; white-space: nowrap;
+    }
+    .btn-auto:hover { background: rgba(255,169,77,.15); border-color: var(--peach); }
+    .btn-auto.on    { background: rgba(255,169,77,.2); color: #b35c00; border-color: var(--peach); }
+
+    .threshold-note {
+      font-size: .7rem; font-weight: 700; color: var(--lavender);
+      white-space: nowrap;
+    }
+
+    /* ── RIGHT SIDEBAR ── */
+    .sidebar-col { display: flex; flex-direction: column; gap: 1.1rem; }
+
+    /* result card */
+    .result-happy-card {
+      background: #fff; border-radius: 28px;
+      box-shadow: 0 6px 30px rgba(0,0,0,.07);
+      overflow: hidden;
+      border: 3px solid rgba(0,0,0,.06);
+      transition: border-color .45s;
+    }
+    .result-happy-card.granted { border-color: rgba(105,219,124,.6); }
+    .result-happy-card.denied  { border-color: rgba(255,107,107,.55); }
+    .result-happy-card.already { border-color: rgba(255,217,61,.65); }
+
+    .result-card-top {
+      padding: .8rem 1.2rem;
+      background: linear-gradient(135deg, #FFF5F0, #FFF0FA);
+      border-bottom: 2px solid rgba(0,0,0,.06);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .rct-label { font-family: 'Fredoka One', cursive; font-size: 1rem; color: var(--coral); }
+    .rct-icon  { font-size: 1.4rem; }
+
+    .result-card-body { padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: .65rem; }
+    .rc-field-name  { font-size: .62rem; font-weight: 800; color: #c0a090; text-transform: uppercase; letter-spacing: .4px; }
+    .rc-field-value { font-family: 'Fredoka One', cursive; font-size: 1.05rem; color: var(--text); min-height: 1.3em; }
+    .rc-field-value.dim { color: #ddd; font-family: 'Nunito', sans-serif; font-weight: 600; font-size: .9rem; }
+    .rc-field-enroll { color: var(--sky); }
+
+    /* the BIG verdict */
+    .verdict-big {
+      margin: 0 1.2rem 1.2rem;
+      border-radius: 22px; padding: 1.1rem;
+      text-align: center; border: 3px solid transparent;
+      background: #F8F8F5; transition: all .45s;
+    }
+    .verdict-big.granted {
+      background: linear-gradient(135deg, #F0FFF4, #DCFFE8);
+      border-color: rgba(105,219,124,.5);
+      box-shadow: 0 4px 20px rgba(105,219,124,.2);
+    }
+    .verdict-big.denied {
+      background: linear-gradient(135deg, #FFF5F5, #FFE0E0);
+      border-color: rgba(255,107,107,.5);
+      box-shadow: 0 4px 20px rgba(255,107,107,.15);
+    }
+    .verdict-big.already {
+      background: linear-gradient(135deg, #FFFDE0, #FFF5C0);
+      border-color: rgba(255,217,61,.6);
+      box-shadow: 0 4px 20px rgba(255,217,61,.2);
+    }
+    .verdict-icon { font-size: 2.4rem; display: block; margin-bottom: .35rem; animation: none; }
+    .verdict-text {
+      font-family: 'Fredoka One', cursive; font-size: 1.25rem; display: block;
+      color: #3D2C2C; letter-spacing: .3px;
+    }
+    .verdict-sub {
+      font-size: .78rem; font-weight: 600; color: var(--muted);
+      display: block; margin-top: .25rem;
+    }
+    .verdict-icon.bounce { animation: iconBounce .5s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes iconBounce { 0%{transform:scale(.3)} 70%{transform:scale(1.25)} 100%{transform:scale(1)} }
+
+    /* recent entries */
+    .log-happy-card {
+      background: #fff; border-radius: 28px;
+      box-shadow: 0 6px 30px rgba(0,0,0,.07);
+      overflow: hidden;
+      border: 3px solid rgba(105,219,124,.25);
+      flex: 1;
+    }
+    .log-card-header {
+      padding: .8rem 1.2rem;
+      background: linear-gradient(135deg, #F0FFF4, #E8FFEE);
+      border-bottom: 2px solid rgba(105,219,124,.2);
+      display: flex; align-items: center; gap: .4rem;
+    }
+    .log-card-title { font-family: 'Fredoka One', cursive; font-size: 1rem; color: #2f9e44; }
+    .log-count { margin-left: auto; background: rgba(105,219,124,.25); color: #2f9e44;
+      font-weight: 800; font-size: .65rem; padding: .15rem .55rem; border-radius: 99px; }
+
+    .log-entries { overflow-y: auto; max-height: 295px; }
+    .log-entries::-webkit-scrollbar { width: 4px; }
+    .log-entries::-webkit-scrollbar-thumb { background: #e0f0e0; border-radius: 2px; }
+
+    .log-entry {
+      padding: .65rem 1.2rem; border-bottom: 1.5px solid rgba(0,0,0,.04);
+      display: flex; align-items: center; gap: .65rem;
+      animation: entryPop .3s ease;
+    }
+    @keyframes entryPop { from{opacity:0;transform:translateY(6px)} }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry:hover { background: rgba(105,219,124,.04); }
+
+    .log-avatar {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      font-weight: 900; font-size: .75rem;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+    }
+    .av0 { background: linear-gradient(135deg, var(--coral), var(--rose)); }
+    .av1 { background: linear-gradient(135deg, var(--mint), #20c997); }
+    .av2 { background: linear-gradient(135deg, var(--sun), var(--peach)); color:#5a3e00; }
+    .av3 { background: linear-gradient(135deg, var(--sky), var(--lavender)); }
+
+    .log-person-name  { font-weight: 800; font-size: .82rem; color: var(--text); }
+    .log-person-meta  { font-size: .63rem; color: var(--muted); font-weight: 600; }
+    .log-smile-score {
+      margin-left: auto; flex-shrink: 0;
+      font-family: 'Fredoka One', cursive; font-size: .78rem;
+      color: #2f9e44; background: rgba(105,219,124,.15);
+      padding: .18rem .55rem; border-radius: 99px;
+      border: 1.5px solid rgba(105,219,124,.3);
+    }
+    .log-empty-msg {
+      padding: 2.5rem; text-align: center;
+      font-size: .9rem; color: var(--muted); font-weight: 700;
+    }
   </style>
 </head>
 <body>
 
-<nav>
-  <div class="brand"><i class="bi bi-shield-check-fill"></i>Smile<span>Gate</span></div>
+<!-- deco circles -->
+<div class="deco-circle dc1"></div>
+<div class="deco-circle dc2"></div>
+<div class="deco-circle dc3"></div>
+<div class="deco-circle dc4"></div>
+<div class="deco-circle dc5"></div>
+<div class="deco-circle dc6"></div>
+
+<!-- ── NAV ─────────────────────────────────────── -->
+<nav class="happy-nav">
+  <a href="/" class="brand">
+    😊 SmileGate
+    <span class="brand-sub">Happiness Class</span>
+  </a>
   <div class="nav-links">
-    <a href="/"><i class="bi bi-camera-video-fill"></i> Scanner</a>
-    <a href="/register"><i class="bi bi-person-plus-fill"></i> Register</a>
-    <a href="/attendance_log" class="active"><i class="bi bi-journal-check"></i> Log</a>
+    <a href="/" class="nav-pill active">📷 Check In</a>
+    <a href="/register" class="nav-pill">✏️ Join Us</a>
+    <a href="/attendance_log" class="nav-pill">📋 Our Smiles</a>
   </div>
 </nav>
 
-<div class="page-wrap">
-  <div class="page-header">
-    <div>
-      <div class="page-title">Attendance Log</div>
-      <div class="page-sub">All recorded attendance events, most recent first.</div>
+<!-- ── HERO ────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-headline">Show us your biggest smile! 🌟</div>
+  <p class="hero-sub">Your smile is your ticket to happiness class. Look at the camera and let that joy shine through! 🌈</p>
+</div>
+
+<!-- ── STATS ───────────────────────────────────── -->
+<div class="stats-row">
+  <div class="stat-bubble sb-coral">
+    <span class="sb-emoji">👫</span>
+    <span class="sb-num coral" id="stEnrolled">–</span>
+    <span class="sb-lbl">Happy Members</span>
+  </div>
+  <div class="stat-bubble sb-sun">
+    <span class="sb-emoji">🌟</span>
+    <span class="sb-num sun" id="stToday">–</span>
+    <span class="sb-lbl">Here Today</span>
+  </div>
+  <div class="stat-bubble sb-mint">
+    <span class="sb-emoji">📸</span>
+    <span class="sb-num mint" id="stScans">0</span>
+    <span class="sb-lbl">Smiles Scanned</span>
+  </div>
+</div>
+
+<!-- ── MAIN ────────────────────────────────────── -->
+<div class="main-grid">
+
+  <!-- camera card -->
+  <div class="happy-card">
+    <div class="card-topper">
+      <span style="font-size:1.3rem">🎥</span>
+      <span class="card-topper-title">Look here and smile your biggest smile!</span>
+      <div class="recording-dot"></div>
     </div>
-    <div class="page-actions">
-      <button class="btn-export" onclick="exportCSV()">
-        <i class="bi bi-download"></i> Export CSV
+
+    <div class="cam-box">
+      <video id="videoEl" autoplay muted playsinline></video>
+      <img id="annotatedImg" alt=""/>
+      <div class="cam-vign"></div>
+      <div class="face-guide"></div>
+      <div class="sparkle sp1">🌸</div>
+      <div class="sparkle sp2">⭐</div>
+      <div class="sparkle sp3">🌼</div>
+      <div class="sparkle sp4">💛</div>
+      <div class="scan-overlay" id="scanOverlay">
+        <div class="scan-spinner"></div>
+        <div class="scan-msg" id="scanMsg">Reading your happiness…</div>
+      </div>
+      <div class="flash-layer" id="flashLayer"></div>
+    </div>
+
+    <!-- status -->
+    <div class="status-section">
+      <div class="status-big-emoji" id="bigEmoji">😐</div>
+      <div class="status-text-block">
+        <div class="status-title" id="statusTitle" style="color:var(--muted)">Ready when you are!</div>
+        <div class="status-desc" id="statusDesc">Press the big button below to check in 📸</div>
+      </div>
+      <div class="happiness-meter" id="happinessMeter" style="opacity:.3">
+        <div class="hm-label"><span>😄 Happiness</span><span class="hm-val" id="hmVal">—</span></div>
+        <div class="hm-track"><div class="hm-fill" id="hmFill"></div></div>
+      </div>
+    </div>
+
+    <!-- action buttons -->
+    <div class="action-section">
+      <button class="btn-smile" id="btnScan" onclick="doScan()">
+        😄 Check Me In!
       </button>
+      <button class="btn-auto" id="btnAuto" onclick="toggleAuto()">▶ Auto</button>
+      <span class="threshold-note">Need {{ smile_threshold|int }}% joy 💛</span>
     </div>
   </div>
 
-  <!-- ── Summary cards ───────────────────────────────────────────── -->
-  <div class="summary-row">
-    <div class="sum-card">
-      <div class="sum-val">{{ students|length }}</div>
-      <div class="sum-lbl">Registered</div>
-    </div>
-    <div class="sum-card">
-      <div class="sum-val">{{ records|length }}</div>
-      <div class="sum-lbl">Total Records</div>
-    </div>
-    <div class="sum-card">
-      {% set today_str = now if now is defined else '' %}
-      {% set today_records = records|selectattr('date','equalto', today_str)|list %}
-      <div class="sum-val" id="todayCount">
-        {{ records|selectattr('date','equalto', records[0].date if records else '')|list|length if records else 0 }}
-      </div>
-      <div class="sum-lbl">Today's Entries</div>
-    </div>
-    <div class="sum-card">
-      {% if records %}
-        {% set avg = (records|sum(attribute='smile_score')) / records|length %}
-        <div class="sum-val">{{ "%.0f"|format(avg) }}%</div>
-      {% else %}
-        <div class="sum-val">–</div>
-      {% endif %}
-      <div class="sum-lbl">Avg Smile Score</div>
-    </div>
-  </div>
+  <!-- sidebar -->
+  <div class="sidebar-col">
 
-  <div class="log-layout">
-
-    <!-- ── Attendance table ─────────────────────────── -->
-    <div class="panel">
-      <div class="panel-header">
-        <i class="bi bi-table"></i> Records
-        <input class="search-input" type="text" id="searchInput"
-               placeholder="Search name / ID…" oninput="filterTable()" />
+    <!-- result -->
+    <div class="result-happy-card" id="resultCard">
+      <div class="result-card-top">
+        <span class="rct-label">🌈 Who's smiling?</span>
+        <span class="rct-icon" id="rctIcon">🔮</span>
       </div>
-      <div style="overflow-x:auto;">
-        <table class="att-table" id="attTable">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Student</th>
-              <th>Enrollment</th>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Smile Score</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody">
-            {% if records %}
-              {% for r in records %}
-              <tr>
-                <td style="color:var(--muted); font-family:var(--font-mono); font-size:.75rem;">
-                  {{ loop.index }}
-                </td>
-                <td style="font-weight:600;">{{ r.name }}</td>
-                <td><span class="enroll-chip">{{ r.enrollment_no }}</span></td>
-                <td style="font-family:var(--font-mono); font-size:.8rem; color:var(--muted);">{{ r.date }}</td>
-                <td style="font-family:var(--font-mono); font-size:.8rem; color:var(--muted);">{{ r.time }}</td>
-                <td>
-                  <div class="score-bar-wrap">
-                    <div class="score-bar">
-                      <div class="score-fill" style="width:{{ r.smile_score|round(0)|int }}%"></div>
-                    </div>
-                    <div class="score-txt">{{ "%.1f"|format(r.smile_score) }}%</div>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            {% else %}
-              <tr class="empty-row"><td colspan="6">No attendance records yet. Use the Scanner to mark attendance.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ── Student sidebar ──────────────────────────── -->
-    <div>
-      <div class="panel">
-        <div class="panel-header"><i class="bi bi-people-fill"></i> Registered Students</div>
-        <div class="stu-list" id="stuList">
-          {% if students %}
-            {% for s in students %}
-            <div class="stu-item" id="stu-{{ s.id }}">
-              <div class="stu-avatar">
-                {{ s.name.split(' ') | map('first') | join('') | upper | truncate(2, True, '') }}
-              </div>
-              <div>
-                <div class="stu-name">{{ s.name }}</div>
-                <div class="stu-enroll">{{ s.enrollment_no }}</div>
-              </div>
-              <button class="stu-del" title="Delete student"
-                      onclick="deleteStudent({{ s.id }}, '{{ s.name }}')">
-                <i class="bi bi-trash3"></i>
-              </button>
-            </div>
-            {% endfor %}
-          {% else %}
-            <div style="padding:2rem; text-align:center; color:var(--muted); font-size:.85rem;">
-              No students registered yet.
-            </div>
-          {% endif %}
+      <div class="result-card-body">
+        <div>
+          <div class="rc-field-name">Name</div>
+          <div class="rc-field-value dim" id="rcName">Waiting…</div>
         </div>
+        <div>
+          <div class="rc-field-name">Student ID</div>
+          <div class="rc-field-value rc-field-enroll dim" id="rcEnroll">– – – –</div>
+        </div>
+        <div>
+          <div class="rc-field-name">Happiness Score</div>
+          <div class="rc-field-value dim" id="rcScore">Not checked yet</div>
+        </div>
+      </div>
+      <div class="verdict-big" id="verdictBig">
+        <span class="verdict-icon" id="verdictIcon">🌻</span>
+        <span class="verdict-text" id="verdictText">Step up and smile!</span>
+        <span class="verdict-sub"  id="verdictSub">We're excited to see you 😊</span>
+      </div>
+    </div>
+
+    <!-- log -->
+    <div class="log-happy-card">
+      <div class="log-card-header">
+        <span style="font-size:1.1rem">🎉</span>
+        <span class="log-card-title">Today's Happy Faces</span>
+        <span class="log-count" id="logCount">0</span>
+      </div>
+      <div class="log-entries">
+        <div class="log-empty-msg" id="logEmpty">No check-ins yet!<br>Be the first to smile 🌟</div>
+        <div id="logItems"></div>
       </div>
     </div>
 
@@ -297,51 +568,170 @@
 </div>
 
 <script>
-// ── Live table search ──────────────────────────────────────
-function filterTable() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
-  document.querySelectorAll('#tableBody tr:not(.empty-row)').forEach(row => {
-    const txt = row.textContent.toLowerCase();
-    row.style.display = txt.includes(q) ? '' : 'none';
-  });
-}
+const THR = {{ smile_threshold }};
+let autoTimer = null, scans = 0;
+const video    = document.getElementById('videoEl');
+const annotImg = document.getElementById('annotatedImg');
 
-// ── Delete student ─────────────────────────────────────────
-async function deleteStudent(id, name) {
-  if (!confirm(`Delete student "${name}" and all their attendance records?`)) return;
+async function initCam() {
   try {
-    const resp = await fetch(`/api/delete_student/${id}`, { method:'DELETE' });
-    const data = await resp.json();
-    if (data.status === 'success') {
-      document.getElementById(`stu-${id}`)?.remove();
-    } else {
-      alert('Delete failed: ' + data.message);
-    }
-  } catch { alert('Network error.'); }
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  } catch (e) {
+    setStatus('😢', 'Oops! Camera not found', e.message, 'var(--coral)');
+  }
 }
 
-// ── CSV export ─────────────────────────────────────────────
-function exportCSV() {
-  const rows = [['Name','Enrollment No','Date','Time','Smile Score']];
-  document.querySelectorAll('#tableBody tr:not(.empty-row)').forEach(tr => {
-    const cells = [...tr.querySelectorAll('td')];
-    if (cells.length > 1) {
-      rows.push([
-        cells[1].textContent.trim(),
-        cells[2].textContent.trim(),
-        cells[3].textContent.trim(),
-        cells[4].textContent.trim(),
-        cells[5].textContent.trim()
-      ]);
-    }
-  });
-  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'attendance_log.csv';
-  a.click();
+async function doScan() {
+  const btn = document.getElementById('btnScan');
+  btn.classList.add('loading');
+  btn.textContent = '⏳ Looking for smiles…';
+  document.getElementById('scanOverlay').classList.add('on');
+  const msgs = ['Reading your happiness…','Checking that smile…','Feeling the joy…','Almost there!'];
+  let mi = 0;
+  const mt = setInterval(() => { document.getElementById('scanMsg').textContent = msgs[mi++ % msgs.length]; }, 500);
+  const c = document.createElement('canvas');
+  c.width = video.videoWidth || 640; c.height = video.videoHeight || 480;
+  c.getContext('2d').drawImage(video, 0, 0);
+  try {
+    const res = await fetch('/api/recognize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: c.toDataURL('image/jpeg', .85) })
+    });
+    const data = await res.json();
+    scans++; document.getElementById('stScans').textContent = scans;
+    applyResult(data);
+  } catch (e) {
+    applyResult({ status: 'error', message: 'Connection issue: ' + e.message });
+  }
+  clearInterval(mt);
+  document.getElementById('scanOverlay').classList.remove('on');
+  btn.classList.remove('loading'); btn.textContent = '😄 Check Me In!';
 }
+
+function applyResult(d) {
+  if (d.annotated_img) {
+    annotImg.src = 'data:image/jpeg;base64,' + d.annotated_img;
+    annotImg.classList.add('show');
+    setTimeout(() => annotImg.classList.remove('show'), 3500);
+  }
+  const fl = document.getElementById('flashLayer');
+  fl.className = 'flash-layer ' + (d.status === 'success' ? 'happy' : 'sad') + ' on';
+  setTimeout(() => fl.classList.remove('on'), 450);
+  if (d.status === 'success') celebrate();
+
+  if (d.status === 'success')
+    setStatus('🥳', `Yay, ${d.name}! Welcome! 🎉`, 'You\'re in! Enjoy your happiness class 🌈', '#2f9e44');
+  else if (d.status === 'denied' && d.name)
+    setStatus('😅', 'Smile a little wider!', `Come on ${d.name}, show more joy! Score: ${d.smile_score?.toFixed(0)||0}%`, 'var(--peach)');
+  else if (d.status === 'denied')
+    setStatus('🤔', 'Hmm, we don\'t know you yet!', 'Have you registered? Click "Join Us" above!', 'var(--coral)');
+  else if (d.status === 'duplicate')
+    setStatus('😄', `You\'re already here, ${d.name}! 👏`, 'Have a wonderful class today! 🌸', '#b35c00');
+  else
+    setStatus('😕', 'Something went wrong', d.message || 'Give it another try!', 'var(--muted)');
+
+  const meter = document.getElementById('happinessMeter');
+  const fill  = document.getElementById('hmFill');
+  const val   = document.getElementById('hmVal');
+  if (d.smile_score != null) {
+    meter.style.opacity = '1';
+    const p = Math.min(100, d.smile_score);
+    fill.style.width = p + '%';
+    fill.className = 'hm-fill' + (p < THR ? ' low' : '');
+    val.textContent = p.toFixed(0) + '%';
+  } else {
+    meter.style.opacity = '.3'; fill.style.width = '0%'; val.textContent = '—';
+  }
+
+  const card = document.getElementById('resultCard');
+  card.className = 'result-happy-card';
+  const rn = document.getElementById('rcName'), re = document.getElementById('rcEnroll'), rs = document.getElementById('rcScore');
+  if (d.name) { rn.textContent = d.name; rn.classList.remove('dim'); re.textContent = d.enrollment_no; re.classList.remove('dim'); }
+  else { rn.textContent = 'Unknown face'; rn.classList.add('dim'); re.textContent = '– – – –'; re.classList.add('dim'); }
+  if (d.smile_score != null) { rs.textContent = d.smile_score.toFixed(1) + '% happy! 😄'; rs.classList.remove('dim'); }
+  else { rs.textContent = 'Not checked yet'; rs.classList.add('dim'); }
+
+  const vi = document.getElementById('verdictIcon'), vt = document.getElementById('verdictText'), vs = document.getElementById('verdictSub');
+  const vb = document.getElementById('verdictBig'), icon = document.getElementById('rctIcon');
+  vb.className = 'verdict-big'; vi.classList.remove('bounce');
+  void vi.offsetWidth; vi.classList.add('bounce');
+
+  if (d.status === 'success') {
+    card.classList.add('granted'); icon.textContent = '✅'; vb.classList.add('granted');
+    vi.textContent = '🎉'; vt.textContent = 'Access Granted!'; vs.textContent = 'Welcome to happiness class! 🌟';
+  } else if (d.status === 'denied') {
+    card.classList.add('denied'); icon.textContent = '❌'; vb.classList.add('denied');
+    vi.textContent = d.name ? '😅' : '🤔';
+    vt.textContent = d.name ? 'Need More Smiles!' : 'Not Recognised';
+    vs.textContent = d.name ? 'Try again with a bigger smile! 😁' : 'Please register first!';
+  } else if (d.status === 'duplicate') {
+    card.classList.add('already'); icon.textContent = '⭐'; vb.classList.add('already');
+    vi.textContent = '😄'; vt.textContent = 'Already Checked In!'; vs.textContent = 'Enjoy your day! 🌻';
+  } else {
+    icon.textContent = '❓'; vi.textContent = '😕'; vt.textContent = 'Something went wrong'; vs.textContent = 'Please try again';
+  }
+
+  if (d.status === 'success') { refreshLog(); refreshStats(); }
+}
+
+function setStatus(emoji, title, desc, color) {
+  const e = document.getElementById('bigEmoji');
+  e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop');
+  e.textContent = emoji;
+  const t = document.getElementById('statusTitle');
+  t.style.color = color; t.textContent = title;
+  document.getElementById('statusDesc').textContent = desc;
+}
+
+function celebrate() {
+  const box = document.querySelector('.cam-box');
+  const cols = ['#FFD93D','#FF6B6B','#69DB7C','#74C0FC','#C77DFF','#FFA94D','#F783AC'];
+  for (let i = 0; i < 36; i++) {
+    const el = document.createElement('div'); el.className = 'confetti-piece';
+    const dur = (.45 + Math.random() * 1).toFixed(2);
+    el.style.cssText = `left:${Math.random()*100}%;top:${10+Math.random()*70}%;
+      background:${cols[i%cols.length]};border-radius:${Math.random()>.4?'50%':'4px'};
+      animation:confettiFall ${dur}s ease-out forwards`;
+    box.appendChild(el); setTimeout(() => el.remove(), 1600);
+  }
+}
+
+function toggleAuto() {
+  const b = document.getElementById('btnAuto');
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; b.classList.remove('on'); b.textContent = '▶ Auto'; }
+  else { autoTimer = setInterval(doScan, 3000); b.classList.add('on'); b.textContent = '⏹ Stop'; }
+}
+
+async function refreshLog() {
+  try {
+    const records = await (await fetch('/api/attendance')).json();
+    document.getElementById('logCount').textContent = records.length;
+    const items = document.getElementById('logItems'), empty = document.getElementById('logEmpty');
+    if (!records.length) { empty.style.display = 'block'; items.innerHTML = ''; return; }
+    empty.style.display = 'none';
+    items.innerHTML = records.slice(0, 14).map((r, i) => {
+      const ini = r.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      return `<div class="log-entry">
+        <div class="log-avatar av${i%4}">${ini}</div>
+        <div><div class="log-person-name">${r.name}</div><div class="log-person-meta">${r.time}</div></div>
+        <div class="log-smile-score">${r.smile_score.toFixed(0)}% 😄</div>
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function refreshStats() {
+  try {
+    const [sR, aR] = await Promise.all([fetch('/api/students'), fetch('/api/attendance')]);
+    const students = await sR.json(), att = await aR.json();
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('stEnrolled').textContent = students.length;
+    document.getElementById('stToday').textContent    = att.filter(r => r.date === today).length;
+  } catch {}
+}
+
+initCam(); refreshStats(); refreshLog();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
