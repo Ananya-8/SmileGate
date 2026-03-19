@@ -4,6 +4,7 @@ import sqlite3, json
 from datetime import datetime, date
 
 app = Flask(__name__, static_folder='frontend', static_url_path='')
+CORS(app)                   
 DB = "smilegate.db"
 
 def get_db():
@@ -130,4 +131,5 @@ def get_stats():
 
 if __name__ == '__main__':
     import os
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 10000))
+    app.run(debug=False, host='0.0.0.0', port=port)
