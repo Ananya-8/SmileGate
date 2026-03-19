@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>😊 SmileGate – Happiness Check-In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    :root {
+      --sun:#FFD93D; --coral:#FF6B6B; --sky:#74C0FC; --mint:#69DB7C;
+      --peach:#FFA94D; --lavender:#C77DFF; --rose:#F783AC;
+      --cream:#FFFBF0; --warm:#FFF3E0; --text:#3D2C2C; --muted:#9E8585;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Nunito', sans-serif; background: var(--cream); min-height: 100vh; overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 45% at 0%   0%,  rgba(255,217,61,.28)  0%, transparent 55%),
+        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(255,107,107,.18) 0%, transparent 55%),
+        radial-gradient(ellipse 45% 40% at 50%  0%,  rgba(247,131,172,.15) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 50% at 0%  100%, rgba(105,219,124,.18) 0%, transparent 55%),
+        radial-gradient(ellipse 35% 40% at 100% 0%,  rgba(116,192,252,.18) 0%, transparent 55%);
+    }
+    .deco-circle { position:fixed; border-radius:50%; pointer-events:none; z-index:0; animation:floatDeco 6s ease-in-out infinite; }
+    .dc1{width:90px;height:90px;background:rgba(255,217,61,.22);top:5%;left:3%;animation-delay:0s}
+    .dc2{width:60px;height:60px;background:rgba(247,131,172,.2);top:12%;right:5%;animation-delay:1.2s}
+    .dc3{width:75px;height:75px;background:rgba(105,219,124,.2);bottom:15%;left:6%;animation-delay:2.5s}
+    .dc4{width:50px;height:50px;background:rgba(116,192,252,.22);bottom:10%;right:3%;animation-delay:0.8s}
+    .dc5{width:40px;height:40px;background:rgba(255,169,77,.22);top:45%;left:1%;animation-delay:3.5s}
+    .dc6{width:55px;height:55px;background:rgba(199,125,255,.18);top:60%;right:2%;animation-delay:2s}
+    @keyframes floatDeco { 0%,100%{transform:translateY(0px) scale(1)} 50%{transform:translateY(-16px) scale(1.08)} }
+
+    /* NAV */
+    .happy-nav { position:sticky;top:0;z-index:100;background:rgba(255,251,240,.92);backdrop-filter:blur(16px);border-bottom:4px solid transparent;border-image:linear-gradient(90deg,var(--sun),var(--coral),var(--rose),var(--lavender),var(--sky),var(--mint)) 1;padding:.7rem 2rem;display:flex;align-items:center;gap:1rem;box-shadow:0 4px 24px rgba(255,107,107,.1) }
+    .brand { font-family:'Fredoka One',cursive;font-size:1.7rem;color:var(--coral);text-decoration:none;letter-spacing:.5px;display:flex;align-items:center;gap:.4rem }
+    .brand-sub { font-size:.55rem;font-weight:900;background:linear-gradient(135deg,var(--peach),var(--rose));color:#fff;padding:.2rem .6rem;border-radius:99px;letter-spacing:1px;text-transform:uppercase;font-family:'Nunito',sans-serif }
+    .nav-links { margin-left:auto;display:flex;gap:.4rem }
+    .nav-pill { font-family:'Nunito',sans-serif;font-weight:800;font-size:.85rem;padding:.42rem 1rem;border-radius:99px;text-decoration:none;color:var(--muted);border:2.5px solid transparent;transition:all .25s;display:flex;align-items:center;gap:.3rem }
+    .nav-pill:hover { color:var(--coral);background:rgba(255,107,107,.08);border-color:rgba(255,107,107,.25) }
+    .nav-pill.active { background:linear-gradient(135deg,var(--coral),var(--rose));color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(255,107,107,.35) }
+
+    /* HERO */
+    .hero { text-align:center;padding:2.2rem 1rem 1rem;position:relative;z-index:1 }
+    .hero-headline { font-family:'Fredoka One',cursive;font-size:2.6rem;color:var(--coral);line-height:1.15 }
+    .hero-sub { font-size:1rem;color:var(--muted);font-weight:600;margin-top:.5rem;max-width:480px;margin-inline:auto }
+
+    /* STATS */
+    .stats-row { display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;padding:.8rem 1.5rem 1rem;position:relative;z-index:1 }
+    .stat-bubble { background:#fff;border-radius:22px;padding:1rem 1.4rem;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.07);border:3px solid transparent;min-width:110px }
+    .stat-bubble.sb-sun   { border-color:rgba(255,217,61,.6) }
+    .stat-bubble.sb-coral { border-color:rgba(255,107,107,.5) }
+    .stat-bubble.sb-mint  { border-color:rgba(105,219,124,.55) }
+    .sb-emoji { font-size:1.6rem;line-height:1;display:block;margin-bottom:.3rem }
+    .sb-num { font-family:'Fredoka One',cursive;font-size:2rem;line-height:1;display:block }
+    .sb-num.sun   { color:#e6a800 }
+    .sb-num.coral { color:var(--coral) }
+    .sb-num.mint  { color:#2f9e44 }
+    .sb-lbl { font-size:.65rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem;display:block }
+
+    /* MAIN GRID */
+    .main-grid { display:grid;grid-template-columns:480px 1fr;gap:1.3rem;padding:0 1.5rem 3rem;position:relative;z-index:1 }
+    @media(max-width:920px) { .main-grid { grid-template-columns:1fr } }
+
+    /* CAMERA CARD */
+    .happy-card { background:#fff;border-radius:28px;box-shadow:0 8px 40px rgba(255,107,107,.1),0 2px 12px rgba(0,0,0,.05);overflow:hidden }
+    .card-topper { padding:1rem 1.4rem;background:linear-gradient(135deg,#FFF0E0,#FFF0F5);border-bottom:2.5px solid rgba(255,107,107,.12);display:flex;align-items:center;gap:.6rem }
+    .card-topper-title { font-family:'Fredoka One',cursive;font-size:1.1rem;color:var(--coral) }
+    .recording-dot { width:11px;height:11px;border-radius:50%;background:var(--coral);margin-left:auto;box-shadow:0 0 0 4px rgba(255,107,107,.2);animation:recPulse 1.5s infinite }
+    @keyframes recPulse { 0%,100%{box-shadow:0 0 0 4px rgba(255,107,107,.2)} 50%{box-shadow:0 0 0 8px rgba(255,107,107,.05)} }
+
+    .cam-box { position:relative;background:#222;aspect-ratio:4/3;overflow:hidden;width:100% }
+    #videoEl { width:100%;height:100%;object-fit:cover;display:block }
+    #faceCanvas { position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none }
+    .cam-vign { position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse 80% 80% at 50% 50%,transparent 50%,rgba(255,251,240,.38) 100%) }
+    .face-guide { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:175px;height:175px;border-radius:50%;z-index:3;pointer-events:none;border:4px dashed rgba(255,217,61,.8);box-shadow:0 0 30px rgba(255,217,61,.3),inset 0 0 30px rgba(255,217,61,.08);animation:guidePulse 2.5s ease-in-out infinite }
+    @keyframes guidePulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.75} 50%{transform:translate(-50%,-50%) scale(1.04);opacity:1} }
+    .sparkle { position:absolute;font-size:1.8rem;z-index:4;pointer-events:none;animation:sparkleFloat 3.5s ease-in-out infinite }
+    .sp1{top:14px;left:14px;animation-delay:0s} .sp2{top:14px;right:14px;animation-delay:.9s}
+    .sp3{bottom:14px;left:14px;animation-delay:1.8s} .sp4{bottom:14px;right:14px;animation-delay:2.7s}
+    @keyframes sparkleFloat { 0%,100%{transform:translateY(0) scale(1) rotate(0deg)} 50%{transform:translateY(-10px) scale(1.2) rotate(12deg)} }
+
+    .scan-overlay { position:absolute;inset:0;z-index:8;background:rgba(255,251,240,.86);backdrop-filter:blur(8px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem }
+    .scan-overlay.on { display:flex }
+    .scan-spinner { width:68px;height:68px;border-radius:50%;border:5px solid rgba(255,217,61,.3);border-top-color:var(--sun);border-right-color:var(--coral);animation:spin .75s linear infinite }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .scan-msg { font-family:'Fredoka One',cursive;font-size:1.1rem;color:var(--coral);animation:msgBlink 1.2s ease-in-out infinite }
+    @keyframes msgBlink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .flash-layer { position:absolute;inset:0;z-index:9;opacity:0;pointer-events:none;transition:opacity .2s }
+    .flash-layer.happy { background:rgba(105,219,124,.28) }
+    .flash-layer.sad   { background:rgba(255,107,107,.18) }
+    .flash-layer.on    { opacity:1 }
+    .confetti-piece { position:absolute;width:9px;height:9px;border-radius:50%;z-index:10;pointer-events:none }
+    @keyframes confettiFall { 0%{opacity:1;transform:translateY(0) rotate(0)} 100%{opacity:0;transform:translateY(-100px) rotate(450deg)} }
+
+    /* STATUS */
+    .status-section { padding:1rem 1.4rem;background:#FFFBF5;border-top:2.5px solid rgba(255,217,61,.25);display:flex;align-items:center;gap:1rem;min-height:82px }
+    .status-big-emoji { font-size:3.2rem;flex-shrink:0;filter:drop-shadow(0 3px 10px rgba(255,107,107,.2)) }
+    .status-big-emoji.pop { animation:emoPop .5s cubic-bezier(.34,1.56,.64,1) }
+    @keyframes emoPop { 0%{transform:scale(.3) rotate(-25deg)} 65%{transform:scale(1.3) rotate(5deg)} 100%{transform:scale(1)} }
+    .status-text-block { flex:1 }
+    .status-title { font-family:'Fredoka One',cursive;font-size:1.1rem;transition:color .3s }
+    .status-desc  { font-size:.8rem;color:var(--muted);font-weight:600;margin-top:.1rem }
+    .happiness-meter { min-width:130px;display:flex;flex-direction:column;gap:.35rem }
+    .hm-label { font-size:.65rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:flex;justify-content:space-between }
+    .hm-label .hm-val { color:var(--mint);font-family:'Fredoka One',cursive;font-size:.78rem }
+    .hm-track { height:12px;background:#F0ECE0;border-radius:99px;overflow:hidden }
+    .hm-fill { height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--sun),var(--mint));transition:width .9s cubic-bezier(.34,1.56,.64,1) }
+    .hm-fill.low { background:linear-gradient(90deg,var(--coral),var(--rose)) }
+
+    /* BUTTONS */
+    .action-section { padding:.9rem 1.4rem;background:#FFFBF5;border-top:2px solid rgba(0,0,0,.05);display:flex;gap:.7rem;align-items:center }
+    .btn-smile { flex:1;font-family:'Fredoka One',cursive;font-size:1.15rem;background:linear-gradient(135deg,var(--coral) 0%,var(--rose) 100%);color:#fff;border:none;border-radius:99px;padding:.85rem 1.5rem;cursor:pointer;letter-spacing:.5px;box-shadow:0 6px 22px rgba(255,107,107,.38);transition:transform .18s,box-shadow .2s;display:flex;align-items:center;justify-content:center;gap:.5rem }
+    .btn-smile:hover { transform:translateY(-3px) scale(1.02);box-shadow:0 10px 30px rgba(255,107,107,.5) }
+    .btn-smile:active { transform:translateY(1px) scale(.98) }
+    .btn-smile:disabled { opacity:.55;pointer-events:none }
+    .btn-auto { font-family:'Nunito',sans-serif;font-weight:800;font-size:.82rem;background:#FFF0E0;color:var(--peach);border:2.5px solid rgba(255,169,77,.4);border-radius:99px;padding:.8rem 1.1rem;cursor:pointer;transition:all .2s;white-space:nowrap }
+    .btn-auto:hover { background:rgba(255,169,77,.15);border-color:var(--peach) }
+    .btn-auto.on    { background:rgba(255,169,77,.2);color:#b35c00;border-color:var(--peach) }
+    .threshold-note { font-size:.7rem;font-weight:700;color:var(--lavender);white-space:nowrap }
+
+    /* SIDEBAR */
+    .sidebar-col { display:flex;flex-direction:column;gap:1.1rem }
+    .result-happy-card { background:#fff;border-radius:28px;box-shadow:0 6px 30px rgba(0,0,0,.07);overflow:hidden;border:3px solid rgba(0,0,0,.06);transition:border-color .45s }
+    .result-happy-card.granted { border-color:rgba(105,219,124,.6) }
+    .result-happy-card.denied  { border-color:rgba(255,107,107,.55) }
+    .result-happy-card.already { border-color:rgba(255,217,61,.65) }
+    .result-card-top { padding:.8rem 1.2rem;background:linear-gradient(135deg,#FFF5F0,#FFF0FA);border-bottom:2px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:space-between }
+    .rct-label { font-family:'Fredoka One',cursive;font-size:1rem;color:var(--coral) }
+    .rct-icon  { font-size:1.4rem }
+    .result-card-body { padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:.65rem }
+    .rc-field-name  { font-size:.62rem;font-weight:800;color:#c0a090;text-transform:uppercase;letter-spacing:.4px }
+    .rc-field-value { font-family:'Fredoka One',cursive;font-size:1.05rem;color:var(--text);min-height:1.3em }
+    .rc-field-value.dim { color:#ddd;font-family:'Nunito',sans-serif;font-weight:600;font-size:.9rem }
+    .rc-field-enroll { color:var(--sky) }
+    .verdict-big { margin:0 1.2rem 1.2rem;border-radius:22px;padding:1.1rem;text-align:center;border:3px solid transparent;background:#F8F8F5;transition:all .45s }
+    .verdict-big.granted { background:linear-gradient(135deg,#F0FFF4,#DCFFE8);border-color:rgba(105,219,124,.5);box-shadow:0 4px 20px rgba(105,219,124,.2) }
+    .verdict-big.denied  { background:linear-gradient(135deg,#FFF5F5,#FFE0E0);border-color:rgba(255,107,107,.5);box-shadow:0 4px 20px rgba(255,107,107,.15) }
+    .verdict-big.already { background:linear-gradient(135deg,#FFFDE0,#FFF5C0);border-color:rgba(255,217,61,.6);box-shadow:0 4px 20px rgba(255,217,61,.2) }
+    .verdict-icon { font-size:2.4rem;display:block;margin-bottom:.35rem }
+    .verdict-text { font-family:'Fredoka One',cursive;font-size:1.25rem;display:block;color:#3D2C2C }
+    .verdict-sub  { font-size:.78rem;font-weight:600;color:var(--muted);display:block;margin-top:.25rem }
+    .verdict-icon.bounce { animation:iconBounce .5s cubic-bezier(.34,1.56,.64,1) }
+    @keyframes iconBounce { 0%{transform:scale(.3)} 70%{transform:scale(1.25)} 100%{transform:scale(1)} }
+
+    .log-happy-card { background:#fff;border-radius:28px;box-shadow:0 6px 30px rgba(0,0,0,.07);overflow:hidden;border:3px solid rgba(105,219,124,.25);flex:1 }
+    .log-card-header { padding:.8rem 1.2rem;background:linear-gradient(135deg,#F0FFF4,#E8FFEE);border-bottom:2px solid rgba(105,219,124,.2);display:flex;align-items:center;gap:.4rem }
+    .log-card-title { font-family:'Fredoka One',cursive;font-size:1rem;color:#2f9e44 }
+    .log-count { margin-left:auto;background:rgba(105,219,124,.25);color:#2f9e44;font-weight:800;font-size:.65rem;padding:.15rem .55rem;border-radius:99px }
+    .log-entries { overflow-y:auto;max-height:295px }
+    .log-entries::-webkit-scrollbar { width:4px }
+    .log-entries::-webkit-scrollbar-thumb { background:#e0f0e0;border-radius:2px }
+    .log-entry { padding:.65rem 1.2rem;border-bottom:1.5px solid rgba(0,0,0,.04);display:flex;align-items:center;gap:.65rem;animation:entryPop .3s ease }
+    @keyframes entryPop { from{opacity:0;transform:translateY(6px)} }
+    .log-entry:last-child { border-bottom:none }
+    .log-entry:hover { background:rgba(105,219,124,.04) }
+    .log-avatar { width:36px;height:36px;border-radius:50%;flex-shrink:0;font-weight:900;font-size:.75rem;display:flex;align-items:center;justify-content:center;color:#fff }
+    .av0{background:linear-gradient(135deg,var(--coral),var(--rose))} .av1{background:linear-gradient(135deg,var(--mint),#20c997)}
+    .av2{background:linear-gradient(135deg,var(--sun),var(--peach));color:#5a3e00} .av3{background:linear-gradient(135deg,var(--sky),var(--lavender))}
+    .log-person-name { font-weight:800;font-size:.82rem;color:var(--text) }
+    .log-person-meta { font-size:.63rem;color:var(--muted);font-weight:600 }
+    .log-smile-score { margin-left:auto;flex-shrink:0;font-family:'Fredoka One',cursive;font-size:.78rem;color:#2f9e44;background:rgba(105,219,124,.15);padding:.18rem .55rem;border-radius:99px;border:1.5px solid rgba(105,219,124,.3) }
+    .log-empty-msg { padding:2.5rem;text-align:center;font-size:.9rem;color:var(--muted);font-weight:700 }
+
+    /* loading banner */
+    #loadingBanner { position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#fff;border-radius:99px;padding:.6rem 1.4rem;box-shadow:0 6px 24px rgba(255,107,107,.2);font-family:'Fredoka One',cursive;font-size:.95rem;color:var(--coral);z-index:999;border:2px solid rgba(255,107,107,.2);display:flex;align-items:center;gap:.6rem;transition:opacity .4s }
+    #loadingBanner.hide { opacity:0;pointer-events:none }
+    .mini-spin { width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,107,107,.2);border-top-color:var(--coral);animation:spin .6s linear infinite }
+  </style>
+</head>
+<body>
+
+<div class="deco-circle dc1"></div>
+<div class="deco-circle dc2"></div>
+<div class="deco-circle dc3"></div>
+<div class="deco-circle dc4"></div>
+<div class="deco-circle dc5"></div>
+<div class="deco-circle dc6"></div>
+
+<!-- Loading Banner -->
+<div id="loadingBanner">
+  <div class="mini-spin"></div>
+  <span id="loadingMsg">Loading AI models…</span>
+</div>
+
+<!-- NAV -->
+<nav class="happy-nav">
+  <a href="/" class="brand">😊 SmileGate <span class="brand-sub">Happiness Class</span></a>
+  <div class="nav-links">
+    <a href="/"         class="nav-pill active">📷 Check In</a>
+    <a href="/register" class="nav-pill">✏️ Join Us</a>
+    <a href="/records"  class="nav-pill">📋 Our Smiles</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-headline">Show us your biggest smile! 🌟</div>
+  <p class="hero-sub">Your smile is your ticket to happiness class. Look at the camera and let that joy shine through! 🌈</p>
+</div>
+
+<!-- STATS -->
+<div class="stats-row">
+  <div class="stat-bubble sb-coral">
+    <span class="sb-emoji">👫</span>
+    <span class="sb-num coral" id="stEnrolled">–</span>
+    <span class="sb-lbl">Happy Members</span>
+  </div>
+  <div class="stat-bubble sb-sun">
+    <span class="sb-emoji">🌟</span>
+    <span class="sb-num sun" id="stToday">–</span>
+    <span class="sb-lbl">Here Today</span>
+  </div>
+  <div class="stat-bubble sb-mint">
+    <span class="sb-emoji">📸</span>
+    <span class="sb-num mint" id="stScans">0</span>
+    <span class="sb-lbl">Smiles Scanned</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main-grid">
+
+  <!-- Camera Card -->
+  <div class="happy-card">
+    <div class="card-topper">
+      <span style="font-size:1.3rem">🎥</span>
+      <span class="card-topper-title">Look here and smile your biggest smile!</span>
+      <div class="recording-dot"></div>
+    </div>
+    <div class="cam-box">
+      <video id="videoEl" autoplay muted playsinline></video>
+      <canvas id="faceCanvas"></canvas>
+      <div class="cam-vign"></div>
+      <div class="face-guide"></div>
+      <div class="sparkle sp1">🌸</div>
+      <div class="sparkle sp2">⭐</div>
+      <div class="sparkle sp3">🌼</div>
+      <div class="sparkle sp4">💛</div>
+      <div class="scan-overlay" id="scanOverlay">
+        <div class="scan-spinner"></div>
+        <div class="scan-msg" id="scanMsg">Reading your happiness…</div>
+      </div>
+      <div class="flash-layer" id="flashLayer"></div>
+    </div>
+
+    <!-- Status -->
+    <div class="status-section">
+      <div class="status-big-emoji" id="bigEmoji">😐</div>
+      <div class="status-text-block">
+        <div class="status-title" id="statusTitle" style="color:var(--muted)">Ready when you are!</div>
+        <div class="status-desc"  id="statusDesc">Press the big button below to check in 📸</div>
+      </div>
+      <div class="happiness-meter" id="happinessMeter" style="opacity:.3">
+        <div class="hm-label"><span>😄 Happiness</span><span class="hm-val" id="hmVal">—</span></div>
+        <div class="hm-track"><div class="hm-fill" id="hmFill"></div></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="action-section">
+      <button class="btn-smile" id="btnScan" disabled>
+        😄 Check Me In!
+      </button>
+      <button class="btn-auto" id="btnAuto">▶ Auto</button>
+      <span class="threshold-note">Need 70% joy 💛</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar-col">
+    <div class="result-happy-card" id="resultCard">
+      <div class="result-card-top">
+        <span class="rct-label">🌈 Who's smiling?</span>
+        <span class="rct-icon" id="rctIcon">🔮</span>
+      </div>
+      <div class="result-card-body">
+        <div>
+          <div class="rc-field-name">Name</div>
+          <div class="rc-field-value dim" id="rcName">Waiting…</div>
+        </div>
+        <div>
+          <div class="rc-field-name">Student ID</div>
+          <div class="rc-field-value rc-field-enroll dim" id="rcEnroll">– – – –</div>
+        </div>
+        <div>
+          <div class="rc-field-name">Happiness Score</div>
+          <div class="rc-field-value dim" id="rcScore">Not checked yet</div>
+        </div>
+      </div>
+      <div class="verdict-big" id="verdictBig">
+        <span class="verdict-icon" id="verdictIcon">🌻</span>
+        <span class="verdict-text" id="verdictText">Step up and smile!</span>
+        <span class="verdict-sub"  id="verdictSub">We're excited to see you 😊</span>
+      </div>
+    </div>
+
+    <div class="log-happy-card">
+      <div class="log-card-header">
+        <span style="font-size:1.1rem">🎉</span>
+        <span class="log-card-title">Today's Happy Faces</span>
+        <span class="log-count" id="logCount">0</span>
+      </div>
+      <div class="log-entries">
+        <div class="log-empty-msg" id="logEmpty">No check-ins yet!<br>Be the first to smile 🌟</div>
+        <div id="logItems"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Wait for face-api.js + full page to load ─────────────────
+window.addEventListener('load', () => {
+
+  const API = "";
+  const THR = 70;
+  let faceMatcher  = null;
+  let autoTimer    = null;
+  let scans        = 0;
+  let modelsReady  = false;
+
+  const video  = document.getElementById('videoEl');
+  const canvas = document.getElementById('faceCanvas');
+  const ctx    = canvas.getContext('2d');
+
+  // Wire buttons (no inline onclick needed)
+  document.getElementById('btnScan').addEventListener('click', doScan);
+  document.getElementById('btnAuto').addEventListener('click', toggleAuto);
+
+  // ── 1. Load Models ─────────────────────────────────────────
+  async function loadModels() {
+    const steps = [
+      ['tinyFaceDetector',  'Loading face detector…'],
+      ['faceLandmark68Net', 'Loading landmarks…'],
+      ['faceRecognitionNet','Loading recognition…'],
+      ['faceExpressionNet', 'Loading expressions…']
+    ];
+    for (const [net, msg] of steps) {
+      setLoadMsg(msg);
+      await faceapi.nets[net].loadFromUri('/models');
+    }
+  }
+
+  function setLoadMsg(msg) {
+    document.getElementById('loadingMsg').textContent = msg;
+  }
+  function hideBanner() {
+    document.getElementById('loadingBanner').classList.add('hide');
+  }
+
+  // ── 2. Load Registered Students ────────────────────────────
+  async function loadStudents() {
+    setLoadMsg('Loading students…');
+    try {
+      const students = await fetch(`${API}/api/students`).then(r => r.json());
+      if (!students.length) {
+        setStatus('🤔', 'No students registered yet!', 'Go to "Join Us" to register first.', 'var(--coral)');
+        return;
+      }
+      const labeled = students.map(s =>
+        new faceapi.LabeledFaceDescriptors(
+          `${s.name}||${s.enrollment}`,
+          [new Float32Array(s.descriptor)]
+        )
+      );
+      faceMatcher = new faceapi.FaceMatcher(labeled, 0.5);
+      setStatus('😊', `${students.length} student(s) loaded!`, 'Press Check Me In when ready 📸', 'var(--mint)');
+    } catch(e) {
+      setStatus('😕', 'Could not load students', e.message, 'var(--muted)');
+    }
+  }
+
+  // ── 3. Camera ──────────────────────────────────────────────
+  async function startCamera() {
+    setLoadMsg('Starting camera…');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      video.srcObject = stream;
+      await new Promise(res => { video.onloadedmetadata = () => { video.play(); res(); }; });
+      canvas.width  = video.videoWidth  || 640;
+      canvas.height = video.videoHeight || 480;
+    } catch(e) {
+      setStatus('😢', 'Camera not found!', e.message, 'var(--coral)');
+    }
+  }
+
+  // ── 4. Main Scan ───────────────────────────────────────────
+  async function doScan() {
+    if (!modelsReady) return;
+    const btn = document.getElementById('btnScan');
+    btn.disabled    = true;
+    btn.textContent = '⏳ Looking for smiles…';
+    document.getElementById('scanOverlay').classList.add('on');
+
+    const msgs = ['Reading your happiness…','Checking that smile…','Feeling the joy…','Almost there!'];
+    let mi = 0;
+    const mt = setInterval(() => {
+      document.getElementById('scanMsg').textContent = msgs[mi++ % msgs.length];
+    }, 500);
+
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320 }))
+      .withFaceLandmarks()
+      .withFaceExpressions()
+      .withFaceDescriptor();
+
+    clearInterval(mt);
+    document.getElementById('scanOverlay').classList.remove('on');
+
+    scans++;
+    document.getElementById('stScans').textContent = scans;
+
+    if (!detection) {
+      applyResult({ status: 'no_face' });
+      btn.disabled = false; btn.textContent = '😄 Check Me In!';
+      return;
+    }
+
+    // Draw box
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const { x, y, width, height } = detection.detection.box;
+    const happiness = Math.round((detection.expressions.happy || 0) * 100);
+    const boxColor  = happiness >= THR ? '#69DB7C' : '#FF6B6B';
+    ctx.strokeStyle = boxColor; ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, width, height);
+    ctx.fillStyle = boxColor;
+    ctx.fillRect(x, y + height, width, 22);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Nunito,sans-serif';
+    ctx.fillText(`${happiness}% 😄`, x + 6, y + height + 15);
+    setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 3500);
+
+    // Match face
+    if (!faceMatcher) {
+      applyResult({ status: 'denied', smile_score: happiness });
+      btn.disabled = false; btn.textContent = '😄 Check Me In!';
+      return;
+    }
+
+    const match = faceMatcher.findBestMatch(detection.descriptor);
+    if (match.label === 'unknown') {
+      applyResult({ status: 'denied', smile_score: happiness });
+      btn.disabled = false; btn.textContent = '😄 Check Me In!';
+      return;
+    }
+
+    const [name, enrollment] = match.label.split('||');
+
+    if (happiness < THR) {
+      applyResult({ status: 'denied', name, enrollment, smile_score: happiness });
+      btn.disabled = false; btn.textContent = '😄 Check Me In!';
+      return;
+    }
+
+    // POST check-in to backend
+    try {
+      const res  = await fetch(`${API}/api/checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, enrollment, smile_score: happiness })
+      });
+      const data = await res.json();
+      if (data.success) {
+        applyResult({ status: 'success', name, enrollment, smile_score: happiness, entry_time: data.entry_time });
+        celebrate();
+        refreshLog();
+        refreshStats();
+      } else {
+        applyResult({ status: 'duplicate', name, enrollment, smile_score: happiness });
+      }
+    } catch(e) {
+      applyResult({ status: 'error', message: e.message });
+    }
+
+    btn.disabled = false;
+    btn.textContent = '😄 Check Me In!';
+  }
+
+  // ── 5. Apply Result ────────────────────────────────────────
+  function applyResult(d) {
+    const fl = document.getElementById('flashLayer');
+    fl.className = 'flash-layer ' + (d.status === 'success' ? 'happy' : 'sad') + ' on';
+    setTimeout(() => fl.classList.remove('on'), 450);
+
+    if (d.status === 'success')
+      setStatus('🥳', `Yay, ${d.name}! Welcome! 🎉`, "You're in! Enjoy your happiness class 🌈", '#2f9e44');
+    else if (d.status === 'denied' && d.name)
+      setStatus('😅', 'Smile a little wider!', `Come on ${d.name}, show more joy! Score: ${d.smile_score ?? 0}%`, 'var(--peach)');
+    else if (d.status === 'denied')
+      setStatus('🤔', "Hmm, we don't know you yet!", 'Have you registered? Click "Join Us" above!', 'var(--coral)');
+    else if (d.status === 'duplicate')
+      setStatus('😄', `You're already here, ${d.name}! 👏`, 'Have a wonderful class today! 🌸', '#b35c00');
+    else if (d.status === 'no_face')
+      setStatus('👀', 'No face detected!', 'Move closer and look at the camera 😊', 'var(--muted)');
+    else
+      setStatus('😕', 'Something went wrong', d.message || 'Give it another try!', 'var(--muted)');
+
+    const meter = document.getElementById('happinessMeter');
+    const fill  = document.getElementById('hmFill');
+    const val   = document.getElementById('hmVal');
+    if (d.smile_score != null) {
+      meter.style.opacity = '1';
+      const p = Math.min(100, d.smile_score);
+      fill.style.width = p + '%';
+      fill.className   = 'hm-fill' + (p < THR ? ' low' : '');
+      val.textContent  = p + '%';
+    } else {
+      meter.style.opacity = '.3'; fill.style.width = '0%'; val.textContent = '—';
+    }
+
+    const card = document.getElementById('resultCard');
+    card.className = 'result-happy-card';
+    const rn = document.getElementById('rcName');
+    const re = document.getElementById('rcEnroll');
+    const rs = document.getElementById('rcScore');
+    if (d.name) {
+      rn.textContent = d.name;       rn.classList.remove('dim');
+      re.textContent = d.enrollment; re.classList.remove('dim');
+    } else {
+      rn.textContent = 'Unknown face'; rn.classList.add('dim');
+      re.textContent = '– – – –';     re.classList.add('dim');
+    }
+    if (d.smile_score != null) { rs.textContent = d.smile_score + '% happy! 😄'; rs.classList.remove('dim'); }
+    else { rs.textContent = 'Not checked yet'; rs.classList.add('dim'); }
+
+    const vi   = document.getElementById('verdictIcon');
+    const vt   = document.getElementById('verdictText');
+    const vs   = document.getElementById('verdictSub');
+    const vb   = document.getElementById('verdictBig');
+    const icon = document.getElementById('rctIcon');
+    vb.className = 'verdict-big';
+    vi.classList.remove('bounce'); void vi.offsetWidth; vi.classList.add('bounce');
+
+    if (d.status === 'success') {
+      card.classList.add('granted'); icon.textContent = '✅'; vb.classList.add('granted');
+      vi.textContent = '🎉'; vt.textContent = 'Access Granted!'; vs.textContent = 'Welcome to happiness class! 🌟';
+    } else if (d.status === 'denied') {
+      card.classList.add('denied'); icon.textContent = '❌'; vb.classList.add('denied');
+      vi.textContent = d.name ? '😅' : '🤔';
+      vt.textContent = d.name ? 'Need More Smiles!' : 'Not Recognised';
+      vs.textContent = d.name ? 'Try again with a bigger smile! 😁' : 'Please register first!';
+    } else if (d.status === 'duplicate') {
+      card.classList.add('already'); icon.textContent = '⭐'; vb.classList.add('already');
+      vi.textContent = '😄'; vt.textContent = 'Already Checked In!'; vs.textContent = 'Enjoy your day! 🌻';
+    } else if (d.status === 'no_face') {
+      icon.textContent = '👀'; vi.textContent = '😶'; vt.textContent = 'No Face Detected'; vs.textContent = 'Move closer and try again';
+    } else {
+      icon.textContent = '❓'; vi.textContent = '😕'; vt.textContent = 'Something went wrong'; vs.textContent = 'Please try again';
+    }
+  }
+
+  // ── 6. Helpers ─────────────────────────────────────────────
+  function setStatus(emoji, title, desc, color) {
+    const e = document.getElementById('bigEmoji');
+    e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop');
+    e.textContent = emoji;
+    const t = document.getElementById('statusTitle');
+    t.style.color = color; t.textContent = title;
+    document.getElementById('statusDesc').textContent = desc;
+  }
+
+  function celebrate() {
+    const box  = document.querySelector('.cam-box');
+    const cols = ['#FFD93D','#FF6B6B','#69DB7C','#74C0FC','#C77DFF','#FFA94D','#F783AC'];
+    for (let i = 0; i < 36; i++) {
+      const el  = document.createElement('div');
+      el.className = 'confetti-piece';
+      const dur = (.45 + Math.random()).toFixed(2);
+      el.style.cssText = `left:${Math.random()*100}%;top:${10+Math.random()*70}%;
+        background:${cols[i%cols.length]};border-radius:${Math.random()>.4?'50%':'4px'};
+        animation:confettiFall ${dur}s ease-out forwards`;
+      box.appendChild(el);
+      setTimeout(() => el.remove(), 1600);
+    }
+  }
+
+  function toggleAuto() {
+    const b = document.getElementById('btnAuto');
+    if (autoTimer) {
+      clearInterval(autoTimer); autoTimer = null;
+      b.classList.remove('on'); b.textContent = '▶ Auto';
+    } else {
+      autoTimer = setInterval(doScan, 3000);
+      b.classList.add('on'); b.textContent = '⏹ Stop';
+    }
+  }
+
+  async function refreshLog() {
+    try {
+      const records = await fetch(`${API}/api/attendance`).then(r => r.json());
+      const today   = new Date().toISOString().split('T')[0];
+      const todayRec = records.filter(r => r.date === today);
+      document.getElementById('logCount').textContent = todayRec.length;
+      const items = document.getElementById('logItems');
+      const empty = document.getElementById('logEmpty');
+      if (!todayRec.length) { empty.style.display = 'block'; items.innerHTML = ''; return; }
+      empty.style.display = 'none';
+      items.innerHTML = todayRec.slice(0, 14).map((r, i) => {
+        const ini = r.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        return `<div class="log-entry">
+          <div class="log-avatar av${i%4}">${ini}</div>
+          <div>
+            <div class="log-person-name">${r.name}</div>
+            <div class="log-person-meta">${r.entry_time}</div>
+          </div>
+          <div class="log-smile-score">${r.smile_score}% 😄</div>
+        </div>`;
+      }).join('');
+    } catch(e) {}
+  }
+
+  async function refreshStats() {
+    try {
+      const [sR, aR] = await Promise.all([
+        fetch(`${API}/api/students`),
+        fetch(`${API}/api/attendance`)
+      ]);
+      const students = await sR.json();
+      const att      = await aR.json();
+      const today    = new Date().toISOString().split('T')[0];
+      document.getElementById('stEnrolled').textContent = students.length;
+      document.getElementById('stToday').textContent    = att.filter(r => r.date === today).length;
+    } catch(e) {}
+  }
+
+  // ── 7. Boot ────────────────────────────────────────────────
+  (async () => {
+    try {
+      // Start camera and load models in parallel
+      const camPromise = navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then(stream => {
+          video.srcObject = stream;
+          return new Promise(res => { video.onloadedmetadata = () => { video.play(); res(); }; });
+        });
+
+      await loadModels();
+      await camPromise;
+
+      canvas.width  = video.videoWidth  || 640;
+      canvas.height = video.videoHeight || 480;
+
+      await loadStudents();
+
+      modelsReady = true;
+      document.getElementById('btnScan').disabled = false;
+      hideBanner();
+      refreshStats();
+      refreshLog();
+    } catch(e) {
+      setLoadMsg('❌ Error: ' + e.message);
+    }
+  })();
+
+}); // end window.addEventListener('load')
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

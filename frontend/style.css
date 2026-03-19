@@ -1,0 +1,174 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'Nunito', sans-serif;
+    background: #fffdf5;
+    margin: 0;
+}
+
+/* ── Navbar ── */
+.sg-navbar {
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    padding: 10px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.sg-brand {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    color: #f7b731;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sg-badge {
+    background: #ff6b6b;
+    color: #fff;
+    font-size: 0.6rem;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.sg-nav-links a {
+    text-decoration: none;
+    color: #666;
+    font-weight: 600;
+    margin-left: 18px;
+    font-size: 0.9rem;
+    padding: 6px 14px;
+    border-radius: 20px;
+    transition: all 0.2s;
+}
+.sg-nav-links a:hover { background: #fff8e1; color: #f7b731; }
+.sg-nav-links a.active { background: #f7b731; color: #fff; }
+
+/* ── Cards ── */
+.sg-card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+    overflow: hidden;
+}
+.sg-card-header {
+    background: linear-gradient(135deg, #f7b731, #ffd32a);
+    color: #fff;
+    font-weight: 700;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+}
+
+/* ── Progress bars ── */
+.smile-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.smile-bar-bg {
+    flex: 1;
+    height: 10px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.smile-bar-fill {
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.4s ease;
+    background: #f7b731;
+}
+.smile-bar-fill.green { background: #2ecc71; }
+.smile-bar-fill.red   { background: #e74c3c; }
+
+/* ── Stat cards ── */
+.stat-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.07);
+    padding: 20px;
+    text-align: center;
+}
+.stat-card h3 { font-family: 'Fredoka One', cursive; font-size: 2rem; color: #f7b731; margin: 0; }
+.stat-card p  { color: #999; font-size: 0.85rem; margin: 4px 0 0; }
+
+/* ── Verdict Banner ── */
+.verdict-banner {
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-align: center;
+    font-size: 1rem;
+    margin-top: 10px;
+}
+.verdict-granted  { background: #d4edda; color: #155724; }
+.verdict-denied   { background: #f8d7da; color: #721c24; }
+.verdict-warning  { background: #fff3cd; color: #856404; }
+.verdict-unknown  { background: #e2e3e5; color: #383d41; }
+
+/* ── Webcam ── */
+.cam-wrap { position: relative; display: inline-block; width: 100%; }
+.cam-wrap video  { width: 100%; border-radius: 12px; display: block; }
+.cam-wrap canvas { position: absolute; top: 0; left: 0; border-radius: 12px; }
+
+/* ── Table ── */
+.sg-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.sg-table thead th { background: #fff8e1; color: #f7b731; font-weight: 700; padding: 10px 14px; text-align: left; }
+.sg-table tbody tr { border-bottom: 1px solid #f5f5f5; }
+.sg-table tbody tr:hover { background: #fffdf0; }
+.sg-table tbody td { padding: 9px 14px; vertical-align: middle; }
+
+/* ── Buttons ── */
+.btn-sg {
+    background: linear-gradient(135deg, #f7b731, #ffd32a);
+    color: #fff;
+    border: none;
+    border-radius: 24px;
+    padding: 10px 24px;
+    font-weight: 700;
+    font-family: 'Nunito', sans-serif;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: opacity 0.2s, transform 0.1s;
+}
+.btn-sg:hover  { opacity: 0.9; transform: translateY(-1px); }
+.btn-sg:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-sg.green  { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+.btn-sg.red    { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+.btn-sg.outline {
+    background: transparent;
+    color: #f7b731;
+    border: 2px solid #f7b731;
+}
+
+/* ── Toast ── */
+#toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: #2ecc71;
+    color: #fff;
+    padding: 14px 22px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 9999;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.error { background: #e74c3c; }
+
+/* ── Page padding ── */
+.sg-page { padding: 28px 24px; max-width: 1200px; margin: 0 auto; }
+
+/* ── Confetti (CSS-only burst) ── */
+@keyframes pop { 0%{transform:scale(0);opacity:1} 100%{transform:scale(3);opacity:0} }
+.confetti-pop { animation: pop 0.6s ease-out forwards; }
